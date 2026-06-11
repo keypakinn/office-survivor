@@ -1,0 +1,2401 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Office Survivor 🏢</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Kanit:wght@400;600;700;900&display=swap');
+
+  :root {
+    --bg: #0f0f1a;
+    --surface: #1a1a2e;
+    --surface2: #16213e;
+    --accent: #e94560;
+    --accent2: #f5a623;
+    --accent3: #00d4aa;
+    --text: #f0f0f0;
+    --text2: #a0a0b0;
+    --card-bg: #1e2a3a;
+    --danger: #ff4444;
+    --safe: #00c853;
+    --border: rgba(255,255,255,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  /* ─── SCREENS ─── */
+  .screen { display: none; min-height: 100vh; padding: 20px; flex-direction: column; align-items: center; justify-content: center; }
+  .screen.active { display: flex; }
+
+  /* ─── LOGO ─── */
+  .logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .logo-title {
+    font-family: 'Kanit', sans-serif;
+    font-weight: 900;
+    font-size: 2.4rem;
+    line-height: 1;
+    background: linear-gradient(135deg, #e94560, #f5a623);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .logo-sub {
+    font-size: 0.85rem;
+    color: var(--text2);
+    margin-top: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    width: 100%;
+    max-width: 320px;
+    padding: 16px 24px;
+    border-radius: 14px;
+    border: none;
+    font-family: 'Kanit', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: linear-gradient(135deg, #e94560, #c93050); color: white; }
+  .btn-secondary { background: linear-gradient(135deg, #1a2a4a, #0f1a2e); color: var(--text); border: 1px solid var(--border); }
+  .btn-success { background: linear-gradient(135deg, #00c853, #009624); color: white; }
+  .btn-danger { background: linear-gradient(135deg, #ff4444, #cc0000); color: white; }
+  .btn-accent { background: linear-gradient(135deg, #f5a623, #e08800); color: #1a1a1a; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+  .btn-sm { padding: 10px 18px; font-size: 0.9rem; max-width: 200px; }
+
+  /* ─── INPUTS ─── */
+  .input-group { width: 100%; max-width: 320px; margin-bottom: 16px; }
+  .input-label { font-size: 0.8rem; color: var(--text2); margin-bottom: 6px; display: block; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+  .input {
+    width: 100%;
+    padding: 14px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input:focus { border-color: var(--accent); }
+  .input::placeholder { color: var(--text2); }
+
+  /* ─── CARD ─── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    width: 100%;
+    max-width: 360px;
+  }
+
+  /* ─── ROOM SCREEN ─── */
+  .room-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 20px;
+  }
+  .room-code {
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 10px 20px;
+    text-align: center;
+  }
+  .room-code-label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; }
+  .room-code-value { font-family: 'Kanit', sans-serif; font-size: 1.8rem; font-weight: 900; color: var(--accent); letter-spacing: 0.2em; }
+
+  .players-list { width: 100%; max-width: 480px; margin-bottom: 20px; }
+  .player-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+  .player-item.me { border-color: var(--accent3); }
+  .player-name { font-weight: 600; font-size: 1rem; }
+  .player-badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .badge-host { background: rgba(245,166,35,0.2); color: var(--accent2); }
+  .badge-ready { background: rgba(0,200,83,0.2); color: var(--safe); }
+  .badge-waiting { background: rgba(160,160,176,0.15); color: var(--text2); }
+  .badge-me { background: rgba(0,212,170,0.2); color: var(--accent3); }
+
+  /* ─── GAME SCREEN ─── */
+  #gameScreen {
+    padding: 0;
+    justify-content: flex-start;
+    background: var(--bg);
+  }
+
+  .game-header {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .turn-info { display: flex; align-items: center; gap: 8px; }
+  .turn-name {
+    font-family: 'Kanit', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .turn-name.my-turn { color: var(--accent3); }
+
+  .timer-circle {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent) calc(var(--pct,1) * 360deg), var(--surface2) 0);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Kanit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .header-indicators { display: flex; gap: 8px; align-items: center; }
+
+  .indicator {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .indicator.attack { background: rgba(233,69,96,0.2); border-color: var(--accent); color: var(--accent); }
+  .indicator.direction { background: rgba(0,212,170,0.15); border-color: var(--accent3); color: var(--accent3); }
+
+  .game-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 16px;
+    gap: 12px;
+    width: 100%;
+  }
+
+  /* Players strip */
+  .players-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0 8px;
+    scrollbar-width: none;
+  }
+  .players-strip::-webkit-scrollbar { display: none; }
+
+  .player-chip {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 2px solid transparent;
+    min-width: 72px;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+  .player-chip.current-turn { border-color: var(--accent3); }
+  .player-chip.eliminated { opacity: 0.35; }
+  .player-chip.me { border-color: rgba(245,166,35,0.4); }
+  .player-chip-avatar { font-size: 1.6rem; }
+  .player-chip-name { font-size: 0.7rem; font-weight: 600; color: var(--text2); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .player-chip-count {
+    font-size: 0.65rem;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .player-chip-protected {
+    position: absolute;
+    top: -4px; right: -4px;
+    font-size: 0.75rem;
+  }
+
+  /* Center area */
+  .center-area {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .deck-pile, .discard-pile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .pile-card {
+    width: 80px; height: 112px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .pile-card.deck-back {
+    background: linear-gradient(135deg, #1a2a4a, #0a1628);
+    border-color: rgba(245,166,35,0.3);
+  }
+  .pile-card.deck-back::before {
+    content: '🏢';
+    font-size: 2rem;
+  }
+  .pile-card img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+  }
+  .pile-card.empty {
+    background: var(--surface2);
+    border-style: dashed;
+    border-color: var(--border);
+  }
+  .pile-card.empty::before {
+    content: '∅';
+    font-size: 1.5rem;
+    color: var(--text2);
+  }
+  .pile-label { font-size: 0.7rem; color: var(--text2); font-weight: 600; }
+  .pile-count { font-size: 0.75rem; color: var(--accent2); font-weight: 700; }
+
+  /* Action log */
+  .action-log {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    color: var(--text2);
+    min-height: 40px;
+    line-height: 1.5;
+  }
+  .action-log .highlight { color: var(--accent2); font-weight: 700; }
+
+  /* Hand area */
+  .hand-label {
+    font-size: 0.75rem;
+    color: var(--text2);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .hand-cards {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px 4px 16px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  .hand-cards::-webkit-scrollbar { display: none; }
+
+  .hand-card {
+    flex-shrink: 0;
+    width: 90px; height: 126px;
+    border-radius: 12px;
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .hand-card img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+    pointer-events: none;
+  }
+  .hand-card.no-image {
+    padding: 8px;
+    gap: 4px;
+  }
+  .hand-card-emoji { font-size: 2rem; }
+  .hand-card-name { font-size: 0.6rem; font-weight: 700; text-align: center; color: var(--text); line-height: 1.2; }
+  .hand-card-type { font-size: 0.55rem; color: var(--text2); }
+
+  .hand-card:active { transform: translateY(-12px) scale(1.04); border-color: var(--accent); box-shadow: 0 12px 24px rgba(233,69,96,0.3); }
+  .hand-card.selected { transform: translateY(-16px); border-color: var(--accent3); box-shadow: 0 12px 32px rgba(0,212,170,0.4); }
+  .hand-card.combo-selected { border-color: var(--accent2); transform: translateY(-8px); }
+  .hand-card.disabled { opacity: 0.35; pointer-events: none; }
+
+  .combo-count-badge {
+    position: absolute;
+    top: -6px; right: -6px;
+    width: 22px; height: 22px;
+    background: var(--accent2);
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: #1a1a1a;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }
+
+  /* Action bar */
+  .action-bar {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .action-bar .btn { flex: 1; max-width: none; padding: 14px 8px; font-size: 0.9rem; }
+
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 40px;
+    width: 100%;
+    max-width: 480px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal-title {
+    font-family: 'Kanit', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .modal-body { display: flex; flex-direction: column; gap: 10px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .modal-actions .btn { flex: 1; max-width: none; }
+
+  /* Target selection */
+  .target-list { display: flex; flex-direction: column; gap: 8px; }
+  .target-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--surface2);
+    border-radius: 12px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .target-item:active { border-color: var(--accent); }
+  .target-avatar { font-size: 1.4rem; }
+  .target-name { font-weight: 600; }
+  .target-count { font-size: 0.8rem; color: var(--text2); margin-left: auto; }
+
+  /* Card preview */
+  .card-preview-big {
+    width: 140px; height: 196px;
+    border-radius: 16px;
+    margin: 0 auto 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    border: 2px solid var(--border);
+  }
+  .card-preview-big img { width: 100%; height: 100%; object-fit: cover; }
+  .card-preview-big.no-image {
+    background: var(--card-bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  }
+  .card-preview-big.no-image .emoji { font-size: 3.5rem; }
+
+  /* Effect cards */
+  .effect-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .effect-card strong { color: var(--accent2); }
+
+  /* Defuse modal */
+  .defuse-modal .modal { border: 2px solid var(--danger); }
+  .defuse-modal .modal-title { color: var(--danger); font-size: 1.5rem; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    z-index: 2000;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    max-width: 90vw;
+    text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--safe); color: var(--safe); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .toast.warning { border-color: var(--accent2); color: var(--accent2); }
+  .toast.info { border-color: var(--accent3); color: var(--accent3); }
+
+  /* Eliminated overlay */
+  .eliminated-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 3000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+  .eliminated-overlay.show { display: flex; }
+  .eliminated-emoji { font-size: 5rem; animation: shake 0.5s ease; }
+  .eliminated-text { font-family: 'Kanit', sans-serif; font-size: 2rem; font-weight: 900; color: var(--danger); }
+  .eliminated-sub { color: var(--text2); font-size: 1rem; text-align: center; }
+
+  /* Winner overlay */
+  .winner-overlay {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, #1a2a0a 0%, #0a0f05 100%);
+    z-index: 3000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+  .winner-overlay.show { display: flex; }
+  .winner-emoji { font-size: 5rem; animation: bounce 0.6s ease infinite alternate; }
+  .winner-text { font-family: 'Kanit', sans-serif; font-size: 2.2rem; font-weight: 900; color: var(--safe); text-align: center; }
+  .winner-sub { color: var(--text2); font-size: 1rem; }
+
+  /* Discard viewer */
+  .discard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    max-height: 55vh;
+    overflow-y: auto;
+  }
+  .discard-grid-card {
+    aspect-ratio: 5/7;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+  }
+  .discard-grid-card img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* Future cards */
+  .future-cards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .future-card {
+    width: 90px; height: 126px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid var(--accent3);
+    box-shadow: 0 4px 16px rgba(0,212,170,0.3);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card-bg);
+    font-size: 1.5rem;
+  }
+  .future-card img { width: 100%; height: 100%; object-fit: cover; }
+  .future-pos {
+    font-size: 0.65rem;
+    text-align: center;
+    color: var(--text2);
+    margin-top: 4px;
+  }
+
+  /* Defuse insert slider */
+  .insert-slider {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .insert-label { font-size: 0.8rem; color: var(--text2); text-align: center; }
+  .insert-positions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .insert-pos-btn {
+    padding: 8px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .insert-pos-btn:hover, .insert-pos-btn:active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* Combo 3 name input */
+  .combo-input {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+  .card-sel-item {
+    aspect-ratio: 5/7;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    cursor: pointer;
+    padding: 6px;
+    transition: border-color 0.15s;
+  }
+  .card-sel-item:active, .card-sel-item.active { border-color: var(--accent); }
+  .card-sel-item .emoji { font-size: 1.5rem; }
+  .card-sel-item .name { font-size: 0.55rem; text-align: center; color: var(--text2); font-weight: 600; }
+
+  @keyframes shake {
+    0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)}
+  }
+  @keyframes bounce {
+    from{transform:translateY(0)} to{transform:translateY(-12px)}
+  }
+  @keyframes pulse {
+    0%,100%{opacity:1} 50%{opacity:0.6}
+  }
+  .pulse { animation: pulse 1s ease infinite; }
+
+  /* Loading */
+  .loading { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .divider { height: 1px; background: var(--border); width: 100%; margin: 8px 0; }
+  .text-center { text-align: center; }
+  .text-muted { color: var(--text2); font-size: 0.85rem; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .gap-8 { gap: 8px; }
+  .w-full { width: 100%; max-width: 320px; }
+  .flex-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+  /* Ripple effect */
+  .ripple { position: relative; overflow: hidden; }
+  .ripple::after {
+    content: '';
+    position: absolute;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    transform: scale(0);
+    animation: ripple-anim 0.4s linear;
+    pointer-events: none;
+  }
+  @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+  /* Nepo baby flash */
+  .nepo-flash {
+    position: fixed; inset: 0;
+    background: rgba(255, 200, 0, 0.15);
+    z-index: 2500;
+    pointer-events: none;
+    animation: nepo-anim 0.6s ease forwards;
+  }
+  @keyframes nepo-anim { 0%{opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════ -->
+<!--  SCREEN: LOADING                       -->
+<!-- ══════════════════════════════════════ -->
+<div id="loadingScreen" class="screen active">
+  <div class="loading">
+    <div class="spinner"></div>
+    <div class="text-muted">กำลังเชื่อมต่อ...</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  SCREEN: HOME                          -->
+<!-- ══════════════════════════════════════ -->
+<div id="homeScreen" class="screen">
+  <div class="logo">
+    <div class="logo-title">🏢 Office Survivor</div>
+    <div class="logo-sub">ใครโดนซองขาวก่อน แพ้!</div>
+  </div>
+
+  <div class="panel flex-col">
+    <div class="input-group">
+      <label class="input-label">ชื่อคุณ</label>
+      <input class="input" id="playerName" placeholder="ใส่ชื่อ..." maxlength="16">
+    </div>
+    <button class="btn btn-primary" id="btnCreate">🎮 สร้างห้อง</button>
+    <div class="divider"></div>
+    <div class="input-group">
+      <label class="input-label">รหัสห้อง</label>
+      <input class="input" id="roomCodeInput" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;letter-spacing:0.2em;font-size:1.3rem;text-align:center;">
+    </div>
+    <button class="btn btn-secondary" id="btnJoin">🚪 เข้าร่วมห้อง</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  SCREEN: ROOM (LOBBY)                  -->
+<!-- ══════════════════════════════════════ -->
+<div id="roomScreen" class="screen" style="justify-content:flex-start;padding-top:40px;">
+  <div class="room-header">
+    <button class="btn btn-ghost btn-sm" id="btnLeaveRoom">← ออก</button>
+    <div class="room-code">
+      <div class="room-code-label">รหัสห้อง</div>
+      <div class="room-code-value" id="displayRoomCode">----</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btnCopyCode">📋 คัดลอก</button>
+  </div>
+
+  <div class="players-list" id="lobbyPlayersList"></div>
+
+  <div style="width:100%;max-width:480px;">
+    <button class="btn btn-success" id="btnReady" style="max-width:none;">✅ พร้อมแล้ว</button>
+    <div class="mt-8"></div>
+    <button class="btn btn-primary" id="btnStartGame" style="max-width:none;display:none;">🎮 เริ่มเกม!</button>
+    <div class="mt-16 text-center text-muted" id="waitingText">รอผู้เล่นอื่น...</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  SCREEN: GAME                          -->
+<!-- ══════════════════════════════════════ -->
+<div id="gameScreen" class="screen">
+
+  <!-- Header -->
+  <div class="game-header">
+    <div class="turn-info">
+      <div class="timer-circle" id="timerCircle" style="--pct:1">30</div>
+      <div>
+        <div class="turn-name" id="currentTurnName">-</div>
+        <div style="font-size:0.7rem;color:var(--text2)" id="attackDebtLabel"></div>
+      </div>
+    </div>
+    <div class="header-indicators">
+      <div class="indicator direction" id="directionIndicator">→</div>
+      <div class="indicator attack" id="attackIndicator" style="display:none">⚡ x<span id="attackDebtNum">0</span></div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="game-body">
+    <!-- Players strip -->
+    <div class="players-strip" id="playersStrip"></div>
+
+    <!-- Center: deck + discard -->
+    <div class="center-area">
+      <div class="deck-pile" id="deckPile">
+        <div class="pile-card deck-back" id="deckCard"></div>
+        <div class="pile-label">กองไพ่</div>
+        <div class="pile-count" id="deckCount">0 ใบ</div>
+      </div>
+
+      <div style="flex:1;max-width:160px;">
+        <div class="action-log" id="actionLog">เกมเริ่มแล้ว ✨</div>
+      </div>
+
+      <div class="discard-pile" id="discardPile">
+        <div class="pile-card empty" id="discardTopCard"></div>
+        <div class="pile-label">กองทิ้ง</div>
+        <div class="pile-count" id="discardCount">0 ใบ</div>
+      </div>
+    </div>
+
+    <!-- My hand -->
+    <div>
+      <div class="hand-label">มือคุณ (<span id="myHandCount">0</span> ใบ)</div>
+      <div class="hand-cards" id="myHandCards"></div>
+    </div>
+
+    <!-- Combo selected area -->
+    <div id="comboArea" style="display:none;">
+      <div class="hand-label" style="color:var(--accent2);">Combo <span id="comboCountLabel">0</span> ใบ</div>
+      <div id="comboSelectedCards" style="display:flex;gap:6px;padding:4px 0;overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button class="btn btn-ghost" id="btnPlayCard" disabled>🃏 เล่นการ์ด</button>
+    <button class="btn btn-accent" id="btnCombo" style="display:none;">✨ Combo!</button>
+    <button class="btn btn-primary" id="btnDraw">จั่วไพ่ →</button>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  MODALS                                -->
+<!-- ══════════════════════════════════════ -->
+
+<!-- Card detail modal -->
+<div class="modal-overlay" id="cardDetailModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="card-preview-big" id="cardDetailPreview"></div>
+    <div class="modal-title" id="cardDetailName"></div>
+    <div class="effect-card" id="cardDetailEffect"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnCardDetailClose">ปิด</button>
+      <button class="btn btn-primary" id="btnCardDetailPlay">🃏 เล่นการ์ดนี้</button>
+    </div>
+  </div>
+</div>
+
+<!-- Target select modal -->
+<div class="modal-overlay" id="targetModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="targetModalTitle">เลือกเป้าหมาย</div>
+    <div class="modal-body">
+      <div class="target-list" id="targetList"></div>
+    </div>
+    <div class="modal-actions mt-8">
+      <button class="btn btn-ghost" id="btnTargetCancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Defuse modal -->
+<div class="modal-overlay defuse-modal" id="defuseModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💣 ซองขาว!</div>
+    <div class="text-center" style="font-size:3.5rem;margin-bottom:12px;">📄</div>
+    <div class="effect-card" id="defuseMessage" style="text-align:center;"></div>
+    <div id="defuseOptions" class="modal-body mt-16"></div>
+    <div class="modal-actions mt-8">
+      <button class="btn btn-danger" id="btnDefuseGiveUp" style="display:none;">😭 ยอมแพ้</button>
+    </div>
+  </div>
+</div>
+
+<!-- Insert position modal -->
+<div class="modal-overlay" id="insertModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📌 วางซองขาวที่ไหน?</div>
+    <div class="insert-slider" id="insertPositions"></div>
+  </div>
+</div>
+
+<!-- Future cards modal -->
+<div class="modal-overlay" id="futureModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔮 ดูดวงแม่หมอ</div>
+    <div style="font-size:0.8rem;color:var(--text2);text-align:center;margin-bottom:12px;">3 ใบบนสุดของกองไพ่</div>
+    <div class="future-cards" id="futureCards"></div>
+    <div class="modal-actions mt-16">
+      <button class="btn btn-primary" id="btnFutureClose">เข้าใจแล้ว ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Discard pile viewer -->
+<div class="modal-overlay" id="discardModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🗂️ กองทิ้ง</div>
+    <div class="discard-grid" id="discardGrid"></div>
+    <div class="modal-actions mt-16">
+      <button class="btn btn-ghost" id="btnDiscardClose">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<!-- Combo 3 name card modal -->
+<div class="modal-overlay" id="combo3Modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📢 เรียกชื่อการ์ด</div>
+    <div class="text-muted text-center" style="margin-bottom:12px;">เลือกการ์ดที่ต้องการขโมย</div>
+    <div class="card-selector" id="combo3CardSelector"></div>
+    <div class="modal-actions mt-16">
+      <button class="btn btn-ghost" id="btnCombo3Cancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Combo 4 steal modal -->
+<div class="modal-overlay" id="combo4Modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">👀 ดูไพ่ทั้งหมดแล้วขโมย</div>
+    <div class="text-muted text-center" style="margin-bottom:12px;" id="combo4TargetName"></div>
+    <div class="hand-cards" id="combo4Cards" style="flex-wrap:wrap;"></div>
+    <div class="modal-actions mt-16">
+      <button class="btn btn-ghost" id="btnCombo4Cancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Combo 5 pick from discard -->
+<div class="modal-overlay" id="combo5Modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📦 หยิบจากกองทิ้ง</div>
+    <div class="text-muted text-center" style="margin-bottom:12px;">เลือก 1 ใบ (ยกเว้นเด็กเส้น)</div>
+    <div class="discard-grid" id="combo5Grid"></div>
+    <div class="modal-actions mt-16">
+      <button class="btn btn-ghost" id="btnCombo5Cancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Counter modal -->
+<div class="modal-overlay" id="counterModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚡ Counter!</div>
+    <div class="effect-card" id="counterMessage"></div>
+    <div class="modal-actions mt-16">
+      <button class="btn btn-danger" id="btnCounter">🥤🥤 ใช้ Combo 2 Counter!</button>
+      <button class="btn btn-ghost" id="btnCounterPass">ยอมรับ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Nepo baby target modal -->
+<div class="modal-overlay" id="nepoModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="color:var(--accent2);">👶 เด็กเส้น!</div>
+    <div class="text-center" style="font-size:0.9rem;color:var(--text2);margin-bottom:12px;">เลือกใครรับซองขาวแทน</div>
+    <div class="target-list" id="nepoTargetList"></div>
+    <div class="modal-actions mt-8">
+      <button class="btn btn-ghost" id="btnNepoCancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Overlays -->
+<div class="eliminated-overlay" id="eliminatedOverlay">
+  <div class="eliminated-emoji">📄</div>
+  <div class="eliminated-text">โดนซองขาวแล้ว!</div>
+  <div class="eliminated-sub">คุณตกรอบแล้ว 😭<br>รอดูการเล่นต่อได้เลย</div>
+  <button class="btn btn-ghost" style="margin-top:24px;" id="btnDismissEliminated">ดูเกมต่อ</button>
+</div>
+
+<div class="winner-overlay" id="winnerOverlay">
+  <div class="winner-emoji">🏆</div>
+  <div class="winner-text" id="winnerName">คุณชนะ!</div>
+  <div class="winner-sub">🎉 รอดจากซองขาว!</div>
+  <button class="btn btn-success" style="margin-top:24px;" id="btnPlayAgain">🔄 เล่นอีกรอบ</button>
+  <button class="btn btn-ghost" style="margin-top:8px;" id="btnBackHome">🏠 กลับหน้าหลัก</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  SCRIPTS                               -->
+<!-- ══════════════════════════════════════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getDatabase, ref, set, get, push, onValue, update, remove, serverTimestamp, off }
+  from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+
+// ─── Firebase Config ───────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyCJxYJFoxR_SeOwctnC44I3YVUszsuFACU",
+  authDomain: "office-survivor-d2a5e.firebaseapp.com",
+  databaseURL: "https://office-survivor-d2a5e-default-rtdb.firebaseio.com",
+  projectId: "office-survivor-d2a5e",
+  storageBucket: "office-survivor-d2a5e.firebasestorage.app",
+  messagingSenderId: "392444048004",
+  appId: "1:392444048004:web:8123ac036fdd5ae97508d1",
+  measurementId: "G-6F9GQ5FR00"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// ─── Card Definitions ──────────────────────────────────────────────────────
+const CARDS = {
+  'white-envelope': { id:'white-envelope', name:'ซองขาว', emoji:'📄', type:'EXPLODING', effect:'หากจั่วได้ ต้องใช้ฟ้องกรมแรงงาน/ร้องเรียนผู้บริหาร/เด็กเส้น ไม่งั้นตกรอบ!', file:'white-envelope.png' },
+  'labor-lawsuit':  { id:'labor-lawsuit',  name:'ฟ้องกรมแรงงาน', emoji:'⚖️', type:'DEFUSE',  effect:'ป้องกันซองขาว แทรกซองขาวกลับกองได้ทุกตำแหน่ง', file:'labor-lawsuit.png' },
+  'throw-work':     { id:'throw-work',     name:'โยนงาน', emoji:'📋', type:'ATTACK',  effect:'จบเทิร์นทันที ไม่ต้องจั่ว ส่ง +2 ให้ผู้เล่นถัดไป', file:'throw-work.png' },
+  'fortune-teller': { id:'fortune-teller', name:'อัญเชิญแม่หมอ', emoji:'🔮', type:'FUTURE',   effect:'ดูไพ่บนสุด 3 ใบ', file:'fortune-teller.png' },
+  'sick-leave':     { id:'sick-leave',     name:'ลาป่วย', emoji:'🏥', type:'SKIP',    effect:'ป้องกัน: แลกงาน, Combo 3, Combo 4, เด็กเส้น', file:'sick-leave.png' },
+  'work-swap':      { id:'work-swap',      name:'แลกงาน', emoji:'🔄', type:'FAVOR',   effect:'เลือกผู้เล่น ผู้เล่นนั้นส่งไพ่ 1 ใบให้คุณ', file:'work-swap.png' },
+  'hr-restructure': { id:'hr-restructure', name:'HR ปรับโครงสร้าง', emoji:'📢', type:'REVERSE',  effect:'เปลี่ยนทิศทาง (2 คน = Skip) ส่ง Attack Debt ตามทิศทางใหม่', file:'hr-restructure.png' },
+  'nepo-baby':      { id:'nepo-baby',      name:'เด็กเส้น', emoji:'👶', type:'NEPO',    effect:'ใช้ตอนจั่วซองขาว (ไม่มีฟ้องกรมแรงงาน) ส่งซองขาวให้คนอื่น', file:'nepo-baby.png' },
+  'green-tea':      { id:'green-tea',      name:'ชาเขียว', emoji:'🥤', type:'COMBO',   effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว', file:'green-tea.png' },
+  'bubble-tea':     { id:'bubble-tea',     name:'ชานมไข่มุก', emoji:'🧋', type:'COMBO',   effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว', file:'bubble-tea.png' },
+  'cocoa':          { id:'cocoa',          name:'โกโก้ปั่น', emoji:'🍫', type:'COMBO',   effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว', file:'cocoa.png' },
+};
+
+const COMBO_RESOURCES = ['green-tea','bubble-tea','cocoa'];
+const ASSET_PATH = './assets/cards/';
+
+function cardImg(cardId) {
+  const c = CARDS[cardId];
+  if (!c) return null;
+  return ASSET_PATH + c.file;
+}
+
+// ─── Deck Builder ──────────────────────────────────────────────────────────
+function buildDeck(playerCount) {
+  const deck = [];
+  const add = (id, n) => { for(let i=0;i<n;i++) deck.push({id, uid: Math.random().toString(36).slice(2)}); };
+  // Main cards (no exploding/defuse/nepo - those are added separately)
+  add('throw-work', 4);
+  add('fortune-teller', 5);
+  add('sick-leave', 4);
+  add('work-swap', 4);
+  add('hr-restructure', 4);
+  add('green-tea', 5);
+  add('bubble-tea', 5);
+  add('cocoa', 5);
+  return shuffle(deck);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// ─── Game State ─────────────────────────────────────────────────────────────
+let myId = null;
+let myName = '';
+let roomCode = null;
+let isHost = false;
+let gameState = null;
+let selectedCards = [];
+let comboMode = false;
+let timerInterval = null;
+let unsubscribers = [];
+let pendingDefuse = null;
+let pendingNepo = null;
+let counterAvailable = false;
+let counterResolveTimeout = null;
+let executorTimeout = null;
+let sickLeaveActive = false; // track my protection
+
+// ─── Utility ──────────────────────────────────────────────────────────────
+function uid() { return Math.random().toString(36).slice(2,9); }
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+let toastTimeout;
+function toast(msg, type='info', dur=2500) {
+  const el = document.getElementById('toast');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function buildCardHTML(cardId, opts={}) {
+  const c = CARDS[cardId];
+  if (!c) return '';
+  const imgPath = cardImg(cardId);
+  return `<img src="${imgPath}" alt="${c.name}" onerror="this.parentElement.classList.add('no-image');this.outerHTML='<span class=\\'hand-card-emoji\\'>${c.emoji}</span><span class=\\'hand-card-name\\'>${c.name}</span>'">`;
+}
+
+// ─── Room Creation ─────────────────────────────────────────────────────────
+async function createRoom(name) {
+  myId = uid();
+  myName = name;
+  isHost = true;
+  roomCode = Math.random().toString(36).slice(2,6).toUpperCase();
+
+  const roomData = {
+    code: roomCode,
+    host: myId,
+    status: 'lobby',
+    createdAt: serverTimestamp(),
+    players: {
+      [myId]: { name, ready: false, host: true, order: 0 }
+    }
+  };
+  await set(ref(db, `rooms/${roomCode}`), roomData);
+  listenRoom(roomCode);
+  document.getElementById('displayRoomCode').textContent = roomCode;
+  showScreen('roomScreen');
+}
+
+async function joinRoom(code, name) {
+  const snap = await get(ref(db, `rooms/${code}`));
+  if (!snap.exists()) { toast('ไม่พบห้องนี้ 😢', 'error'); return; }
+  const room = snap.val();
+  if (room.status !== 'lobby') { toast('เกมเริ่มแล้ว ไม่สามารถเข้าได้', 'error'); return; }
+  const playerCount = Object.keys(room.players || {}).length;
+  if (playerCount >= 20) { toast('ห้องเต็มแล้ว (สูงสุด 20 คน)', 'error'); return; }
+
+  myId = uid();
+  myName = name;
+  isHost = false;
+  roomCode = code;
+
+  await set(ref(db, `rooms/${code}/players/${myId}`), {
+    name, ready: false, host: false, order: playerCount
+  });
+  listenRoom(code);
+  document.getElementById('displayRoomCode').textContent = code;
+  showScreen('roomScreen');
+}
+
+// ─── Lobby Listener ────────────────────────────────────────────────────────
+function listenRoom(code) {
+  const r = ref(db, `rooms/${code}`);
+  const unsub = onValue(r, snap => {
+    if (!snap.exists()) { toast('ห้องถูกปิดแล้ว', 'error'); showScreen('homeScreen'); return; }
+    const room = snap.val();
+    renderLobby(room);
+    if (room.status === 'playing' && room.gameState) {
+      gameState = room.gameState;
+      startGame();
+    }
+  });
+  unsubscribers.push(() => off(r));
+}
+
+function renderLobby(room) {
+  const players = room.players || {};
+  const list = document.getElementById('lobbyPlayersList');
+  list.innerHTML = '';
+
+  const allReady = Object.entries(players).every(([pid, p]) => pid === room.host || p.ready);
+  const count = Object.keys(players).length;
+
+  Object.entries(players).forEach(([pid, p]) => {
+    const div = document.createElement('div');
+    div.className = `player-item ${pid===myId?'me':''}`;
+    const badges = [];
+    if (p.host) badges.push(`<span class="player-badge badge-host">HOST</span>`);
+    if (pid===myId) badges.push(`<span class="player-badge badge-me">คุณ</span>`);
+    if (p.ready) badges.push(`<span class="player-badge badge-ready">✓ พร้อม</span>`);
+    else if (!p.host) badges.push(`<span class="player-badge badge-waiting">รอ...</span>`);
+    div.innerHTML = `<span class="player-name">${p.name}</span><div style="display:flex;gap:4px;">${badges.join('')}</div>`;
+    list.appendChild(div);
+  });
+
+  // Host controls
+  const startBtn = document.getElementById('btnStartGame');
+  const waitText = document.getElementById('waitingText');
+  if (isHost) {
+    if (count >= 2 && allReady) {
+      startBtn.style.display = 'block';
+      waitText.textContent = `ผู้เล่น ${count} คน — กด "เริ่มเกม" ได้เลย!`;
+    } else {
+      startBtn.style.display = 'none';
+      waitText.textContent = count < 2 ? 'รอผู้เล่นอย่างน้อย 2 คน...' : `รอทุกคนกด "พร้อม"...`;
+    }
+  } else {
+    startBtn.style.display = 'none';
+    waitText.textContent = `ผู้เล่น ${count} คน — รอ host เริ่มเกม...`;
+  }
+}
+
+// ─── Game Start (Host) ─────────────────────────────────────────────────────
+async function hostStartGame() {
+  const snap = await get(ref(db, `rooms/${roomCode}/players`));
+  const playersObj = snap.val();
+  const playerIds = Object.keys(playersObj);
+  const shuffledIds = shuffle(playerIds);
+
+  const deck = buildDeck(shuffledIds.length);
+
+  // Deal 5 cards + 1 defuse each
+  const hands = {};
+  shuffledIds.forEach(pid => { hands[pid] = []; });
+
+  for(let i=0;i<5;i++) {
+    shuffledIds.forEach(pid => {
+      if(deck.length) hands[pid].push(deck.pop());
+    });
+  }
+  shuffledIds.forEach(pid => {
+    hands[pid].push({id:'labor-lawsuit', uid: uid()});
+  });
+
+  // Add exploding kittens (= playerCount - 1) and 2 nepo babies
+  const bombs = [];
+  for(let i=0;i<shuffledIds.length-1;i++) bombs.push({id:'white-envelope', uid: uid()});
+  for(let i=0;i<2;i++) bombs.push({id:'nepo-baby', uid: uid()});
+  const finalDeck = shuffle([...deck, ...bombs]);
+
+  const playersState = {};
+  shuffledIds.forEach((pid, i) => {
+    playersState[pid] = {
+      name: playersObj[pid].name,
+      hand: hands[pid],
+      eliminated: false,
+      protected: false,
+      order: i,
+    };
+  });
+
+  const gs = {
+    players: playersState,
+    turnOrder: shuffledIds,
+    currentTurnIndex: 0,
+    direction: 1, // 1 = forward, -1 = reverse
+    deck: finalDeck,
+    discard: [],
+    attackDebt: 0,
+    status: 'playing',
+    lastAction: 'เกมเริ่มแล้ว! 🎉',
+    turnStartTime: Date.now(),
+    comboRightsUsed: false, // ร้องเรียนผู้บริหาร
+    pendingAction: null,
+    version: 1,
+  };
+
+  await update(ref(db, `rooms/${roomCode}`), {
+    status: 'playing',
+    gameState: gs,
+  });
+}
+
+// ─── Listen Game State ─────────────────────────────────────────────────────
+function startGame() {
+  // Remove lobby listeners
+  unsubscribers.forEach(fn => fn());
+  unsubscribers = [];
+
+  showScreen('gameScreen');
+  listenGameState();
+}
+
+function listenGameState() {
+  const r = ref(db, `rooms/${roomCode}/gameState`);
+  const unsub = onValue(r, snap => {
+    if (!snap.exists()) return;
+    const newState = snap.val();
+    const prevState = gameState;
+    gameState = newState;
+    renderGame(prevState);
+    checkPendingActions(prevState);
+  });
+  unsubscribers.push(() => off(r));
+}
+
+// ─── Render Game ───────────────────────────────────────────────────────────
+function renderGame(prevState) {
+  if (!gameState) return;
+  const gs = gameState;
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid]?.eliminated);
+  if (activePlayers.length === 0) return;
+
+  const currentPid = gs.turnOrder[gs.currentTurnIndex];
+  const isMyTurn = currentPid === myId;
+
+  // Header
+  const currentPlayerName = gs.players[currentPid]?.name || '?';
+  const tnEl = document.getElementById('currentTurnName');
+  tnEl.textContent = isMyTurn ? '🌟 เทิร์นของคุณ!' : `เทิร์น: ${currentPlayerName}`;
+  tnEl.className = `turn-name ${isMyTurn ? 'my-turn pulse' : ''}`;
+
+  // Attack indicator
+  const attEl = document.getElementById('attackIndicator');
+  const attNum = document.getElementById('attackDebtNum');
+  if (gs.attackDebt > 0) {
+    attEl.style.display = 'block';
+    attNum.textContent = gs.attackDebt;
+    document.getElementById('attackDebtLabel').textContent = `ต้องจั่ว ${gs.attackDebt} ใบ`;
+  } else {
+    attEl.style.display = 'none';
+    document.getElementById('attackDebtLabel').textContent = '';
+  }
+
+  // Direction
+  document.getElementById('directionIndicator').textContent = gs.direction === 1 ? '→ ปกติ' : '← Reverse';
+
+  // Deck / discard
+  document.getElementById('deckCount').textContent = `${gs.deck.length} ใบ`;
+  document.getElementById('discardCount').textContent = `${gs.discard.length} ใบ`;
+
+  const discardTop = gs.discard.length > 0 ? gs.discard[gs.discard.length - 1] : null;
+  const discardCardEl = document.getElementById('discardTopCard');
+  if (discardTop) {
+    const c = CARDS[discardTop.id];
+    discardCardEl.className = 'pile-card';
+    discardCardEl.innerHTML = `<img src="${cardImg(discardTop.id)}" alt="${c?.name}" onerror="this.outerHTML='<span style=font-size:2rem>${c?.emoji||'?'}</span>'">`;
+  } else {
+    discardCardEl.className = 'pile-card empty';
+    discardCardEl.innerHTML = '';
+  }
+
+  // Action log
+  document.getElementById('actionLog').innerHTML = gs.lastAction || '';
+
+  // Players strip
+  renderPlayersStrip(gs, currentPid);
+
+  // My hand
+  renderMyHand(gs);
+
+  // Timer
+  startTimer(gs, isMyTurn);
+
+  // Action buttons
+  updateActionButtons(gs, isMyTurn);
+
+  // Win check
+  if (gs.status === 'finished') {
+    clearInterval(timerInterval);
+    const winnerId = activePlayers[0];
+    const winnerName = gs.players[winnerId]?.name || 'ไม่ทราบ';
+    document.getElementById('winnerName').textContent = winnerId === myId ? '🏆 คุณชนะ!' : `🏆 ${winnerName} ชนะ!`;
+    document.getElementById('winnerOverlay').classList.add('show');
+  }
+}
+
+function renderPlayersStrip(gs, currentPid) {
+  const strip = document.getElementById('playersStrip');
+  strip.innerHTML = '';
+  const avatars = ['👩‍💼','👨‍💼','🧑‍💻','👩‍🔬','🧑‍🎨','👩‍🍳','🧙','🦸'];
+
+  gs.turnOrder.forEach((pid, i) => {
+    const p = gs.players[pid];
+    if (!p) return;
+    const chip = document.createElement('div');
+    chip.className = `player-chip ${pid===currentPid?'current-turn':''} ${p.eliminated?'eliminated':''} ${pid===myId?'me':''}`;
+    chip.innerHTML = `
+      <div class="player-chip-avatar">${avatars[i % avatars.length]}</div>
+      <div class="player-chip-name">${p.name}</div>
+      <div class="player-chip-count">${(p.hand||[]).length} ใบ</div>
+      ${p.protected ? `<div class="player-chip-protected">🏥</div>` : ''}
+    `;
+    strip.appendChild(chip);
+  });
+}
+
+function renderMyHand(gs) {
+  const me = gs.players[myId];
+  if (!me) return;
+  const hand = me.hand || [];
+  const handEl = document.getElementById('myHandCards');
+  const isMyTurn = gs.turnOrder[gs.currentTurnIndex] === myId;
+  const isEliminated = me.eliminated;
+
+  document.getElementById('myHandCount').textContent = hand.length;
+  handEl.innerHTML = '';
+  selectedCards = selectedCards.filter(uid => hand.some(c => c.uid === uid));
+
+  hand.forEach((card, idx) => {
+    const div = document.createElement('div');
+    const isSelected = selectedCards.includes(card.uid);
+    const isCombo = comboMode && isSelected;
+    const disabled = isEliminated || (!isMyTurn && !comboMode);
+    div.className = `hand-card ${isSelected?(comboMode?'combo-selected':'selected'):''} ${disabled?'disabled':''}`;
+    div.innerHTML = buildCardHTML(card.id);
+
+    // Fallback
+    const c = CARDS[card.id];
+    if (c) {
+      div.dataset.cardUid = card.uid;
+      div.dataset.cardId = card.id;
+    }
+
+    if (!disabled) {
+      div.addEventListener('click', () => onCardClick(card, isMyTurn));
+    }
+
+    // Long press for detail
+    let pressTimer;
+    div.addEventListener('touchstart', () => {
+      pressTimer = setTimeout(() => showCardDetail(card), 500);
+    });
+    div.addEventListener('touchend', () => clearTimeout(pressTimer));
+
+    handEl.appendChild(div);
+  });
+}
+
+function showCardDetail(card) {
+  const c = CARDS[card.id];
+  if (!c) return;
+  const preview = document.getElementById('cardDetailPreview');
+  preview.innerHTML = `<img src="${cardImg(card.id)}" alt="${c.name}" onerror="this.parentElement.classList.add('no-image');this.outerHTML='<span class=emoji>${c.emoji}</span>'">`;
+  document.getElementById('cardDetailName').textContent = `${c.emoji} ${c.name}`;
+  document.getElementById('cardDetailEffect').innerHTML = c.effect;
+
+  const playBtn = document.getElementById('btnCardDetailPlay');
+  const gs = gameState;
+  const isMyTurn = gs?.turnOrder[gs?.currentTurnIndex] === myId;
+  playBtn.style.display = isMyTurn ? 'block' : 'none';
+  playBtn.onclick = () => { closeModal('cardDetailModal'); onCardClick(card, isMyTurn); };
+
+  openModal('cardDetailModal');
+}
+
+function updateActionButtons(gs, isMyTurn) {
+  const btnPlay = document.getElementById('btnPlayCard');
+  const btnDraw = document.getElementById('btnDraw');
+  const btnCombo = document.getElementById('btnCombo');
+  const isElim = gs.players[myId]?.eliminated;
+
+  if (!isMyTurn || isElim) {
+    btnPlay.disabled = true;
+    btnDraw.disabled = true;
+    btnCombo.style.display = 'none';
+    return;
+  }
+
+  btnDraw.disabled = false;
+
+  const comboCount = selectedCards.filter(uid => {
+    const me = gs.players[myId];
+    const card = (me?.hand||[]).find(c => c.uid === uid);
+    return card && COMBO_RESOURCES.includes(card.id);
+  }).length;
+
+  if (comboCount >= 2) {
+    btnCombo.style.display = 'block';
+    btnCombo.textContent = `✨ Combo ${comboCount}!`;
+  } else {
+    btnCombo.style.display = 'none';
+  }
+
+  const hasSelected = selectedCards.length > 0;
+  const nonComboSelected = selectedCards.some(uid => {
+    const me = gs.players[myId];
+    const card = (me?.hand||[]).find(c => c.uid === uid);
+    return card && !COMBO_RESOURCES.includes(card.id);
+  });
+  btnPlay.disabled = !hasSelected || !nonComboSelected;
+}
+
+// ─── Card Click Handler ────────────────────────────────────────────────────
+function onCardClick(card, isMyTurn) {
+  if (!isMyTurn && !comboMode) { showCardDetail(card); return; }
+  const c = CARDS[card.id];
+  if (!c) return;
+
+  // Combo resource — toggle selection
+  if (COMBO_RESOURCES.includes(card.id)) {
+    toggleCardSelect(card.uid);
+    return;
+  }
+
+  // Non-combo card
+  if (selectedCards.includes(card.uid)) {
+    selectedCards = selectedCards.filter(u => u !== card.uid);
+  } else {
+    // Deselect other non-combo cards
+    const me = gameState.players[myId];
+    selectedCards = selectedCards.filter(uid => {
+      const c2 = (me?.hand||[]).find(c => c.uid === uid);
+      return c2 && COMBO_RESOURCES.includes(c2.id);
+    });
+    selectedCards.push(card.uid);
+  }
+  renderMyHand(gameState);
+  updateActionButtons(gameState, isMyTurn);
+}
+
+function toggleCardSelect(cardUid) {
+  if (selectedCards.includes(cardUid)) {
+    selectedCards = selectedCards.filter(u => u !== cardUid);
+  } else {
+    selectedCards.push(cardUid);
+  }
+  renderMyHand(gameState);
+  const gs = gameState;
+  updateActionButtons(gs, gs.turnOrder[gs.currentTurnIndex] === myId);
+}
+
+// ─── Timer ─────────────────────────────────────────────────────────────────
+function startTimer(gs, isMyTurn) {
+  clearInterval(timerInterval);
+  const elapsed = Date.now() - (gs.turnStartTime || Date.now());
+  let remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
+
+  const circle = document.getElementById('timerCircle');
+  const update = () => {
+    remaining = Math.max(0, 30 - Math.floor((Date.now() - gs.turnStartTime) / 1000));
+    circle.textContent = remaining;
+    circle.style.setProperty('--pct', remaining / 30);
+    if (remaining === 0 && isMyTurn) {
+      clearInterval(timerInterval);
+      autoDrawCard();
+    }
+  };
+  update();
+  timerInterval = setInterval(update, 500);
+}
+
+async function autoDrawCard() {
+  if (!gameState) return;
+  const gs = gameState;
+  if (gs.turnOrder[gs.currentTurnIndex] !== myId) return;
+  toast('⏰ หมดเวลา! จั่วอัตโนมัติ', 'warning');
+  await drawCard();
+}
+
+// ─── Draw Card ─────────────────────────────────────────────────────────────
+async function drawCard() {
+  if (!gameState) return;
+  const gs = JSON.parse(JSON.stringify(gameState));
+  if (gs.turnOrder[gs.currentTurnIndex] !== myId) return;
+  if (gs.players[myId]?.eliminated) return;
+
+  const deck = gs.deck;
+  if (deck.length === 0) { toast('ไพ่หมดแล้ว!', 'error'); return; }
+
+  const drawn = deck.pop();
+  selectedCards = [];
+
+  if (drawn.id === 'white-envelope') {
+    // Check defuse options
+    const hand = gs.players[myId].hand || [];
+    const hasDefuse = hand.some(c => c.id === 'labor-lawsuit');
+    const hasNepo = hand.some(c => c.id === 'nepo-baby');
+    const hasCombo5Rights = !gs.comboRightsUsed && hasCombo5Available(hand);
+
+    gs.deck = deck;
+    pendingDefuse = { gs, drawn };
+    showDefuseModal(hasDefuse, hasNepo, hasCombo5Rights, hand);
+    // Don't advance turn yet
+  } else {
+    gs.players[myId].hand = [...(gs.players[myId].hand || []), drawn];
+    gs.deck = deck;
+    gs.lastAction = `<span class="highlight">${myName}</span> จั่วการ์ด`;
+    await advanceTurn(gs);
+  }
+}
+
+function hasCombo5Available(hand) {
+  // Need 5 combo resources of same type
+  const counts = {};
+  hand.forEach(c => { if(COMBO_RESOURCES.includes(c.id)) counts[c.id] = (counts[c.id]||0)+1; });
+  return Object.values(counts).some(v => v >= 5);
+}
+
+function showDefuseModal(hasDefuse, hasNepo, hasCombo5, hand) {
+  const msg = document.getElementById('defuseMessage');
+  msg.textContent = 'คุณจั่วได้ซองขาว! ต้องการการ์ดป้องกัน';
+
+  const opts = document.getElementById('defuseOptions');
+  opts.innerHTML = '';
+
+  if (hasDefuse) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-success';
+    btn.style.maxWidth = 'none';
+    btn.innerHTML = '⚖️ ใช้ฟ้องกรมแรงงาน';
+    btn.onclick = () => useDefuse('labor-lawsuit');
+    opts.appendChild(btn);
+  }
+
+  if (hasCombo5 && !gameState.comboRightsUsed) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-accent';
+    btn.style.maxWidth = 'none';
+    btn.innerHTML = '🎖️ ร้องเรียนผู้บริหาร (Combo 5 Special)';
+    btn.onclick = () => useDefuse('combo5-special');
+    opts.appendChild(btn);
+  }
+
+  if (hasNepo) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-accent';
+    btn.style.maxWidth = 'none';
+    btn.innerHTML = '👶 ใช้เด็กเส้น (ส่งซองขาวคนอื่น)';
+    btn.onclick = () => useNepo();
+    opts.appendChild(btn);
+  }
+
+  const giveUpBtn = document.getElementById('btnDefuseGiveUp');
+  if (!hasDefuse && !hasNepo && (!hasCombo5 || gameState.comboRightsUsed)) {
+    giveUpBtn.style.display = 'block';
+    giveUpBtn.onclick = () => eliminateMe();
+  } else {
+    giveUpBtn.style.display = 'none';
+  }
+
+  openModal('defuseModal');
+}
+
+async function useDefuse(type) {
+  closeModal('defuseModal');
+  if (!pendingDefuse) return;
+  const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+
+  if (type === 'labor-lawsuit') {
+    // Remove defuse from hand
+    const hand = gs.players[myId].hand;
+    const idx = hand.findIndex(c => c.id === 'labor-lawsuit');
+    if (idx >= 0) {
+      const used = hand.splice(idx, 1)[0];
+      gs.discard.push(used);
+    }
+    gs.lastAction = `<span class="highlight">${myName}</span> ใช้ ⚖️ ฟ้องกรมแรงงาน!`;
+  } else if (type === 'combo5-special') {
+    // Use combo 5 resources
+    const hand = gs.players[myId].hand;
+    let removed = 0;
+    for (let i = hand.length - 1; i >= 0 && removed < 5; i--) {
+      if (COMBO_RESOURCES.includes(hand[i].id)) {
+        gs.discard.push(hand.splice(i, 1)[0]);
+        removed++;
+      }
+    }
+    gs.comboRightsUsed = true;
+    gs.lastAction = `<span class="highlight">${myName}</span> ใช้ 🎖️ ร้องเรียนผู้บริหาร!`;
+  }
+
+  // Show insert position
+  pendingDefuse = { ...pendingDefuse, gs };
+  showInsertModal(gs.deck.length);
+}
+
+function showInsertModal(deckSize) {
+  const container = document.getElementById('insertPositions');
+  container.innerHTML = `<div class="insert-label">วางซองขาวที่ตำแหน่งไหน? (1 = บนสุด, ${deckSize+1} = ล่างสุด)</div><div class="insert-positions" id="insertPosButtons"></div>`;
+  const btns = document.getElementById('insertPosButtons');
+
+  // Show max 10 positions + top/bottom
+  btns.innerHTML = '';
+  const pos = ['บนสุด'];
+  const total = deckSize + 1;
+  if (total > 2) {
+    const step = Math.max(1, Math.floor(total / 8));
+    for (let i = step; i < total - step; i += step) {
+      pos.push(`ตำแหน่ง ${i}`);
+      if (pos.length >= 7) break;
+    }
+  }
+  pos.push('ล่างสุด (สุ่ม)');
+
+  pos.forEach((label, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'insert-pos-btn';
+    btn.textContent = label;
+    btn.onclick = () => {
+      closeModal('insertModal');
+      let insertIdx;
+      if (i === 0) insertIdx = deckSize; // top = last in array (drawn from end)
+      else if (i === pos.length - 1) insertIdx = Math.floor(Math.random() * (deckSize + 1));
+      else {
+        const step = Math.max(1, Math.floor((deckSize + 1) / 8));
+        insertIdx = step * i;
+      }
+      insertDefuseAndContinue(insertIdx);
+    };
+    btns.appendChild(btn);
+  });
+
+  openModal('insertModal');
+}
+
+async function insertDefuseAndContinue(insertIdx) {
+  if (!pendingDefuse) return;
+  const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+  const bomb = pendingDefuse.drawn;
+  gs.deck.splice(insertIdx, 0, bomb);
+  pendingDefuse = null;
+
+  // Reduce attack debt if present (defuse uses 1 draw)
+  if (gs.attackDebt > 0) {
+    gs.attackDebt--;
+    if (gs.attackDebt > 0) {
+      // Still has more draws to do — put back state and continue
+      await saveGameState(gs);
+      toast(`ยังต้องจั่วอีก ${gs.attackDebt} ใบ!`, 'warning');
+      return;
+    }
+  }
+
+  await advanceTurn(gs);
+}
+
+async function useNepo() {
+  closeModal('defuseModal');
+  if (!pendingDefuse) return;
+  const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+
+  // Show target selection
+  const list = document.getElementById('nepoTargetList');
+  list.innerHTML = '';
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId);
+
+  activePlayers.forEach(pid => {
+    const p = gs.players[pid];
+    const item = document.createElement('div');
+    item.className = 'target-item';
+    item.innerHTML = `<div class="target-avatar">👤</div><div class="target-name">${p.name}</div>`;
+    item.onclick = () => {
+      closeModal('nepoModal');
+      executeNepo(pid, gs);
+    };
+    list.appendChild(item);
+  });
+
+  document.getElementById('btnNepoCancel').onclick = () => {
+    closeModal('nepoModal');
+    // Reopen defuse modal
+    openModal('defuseModal');
+  };
+  openModal('nepoModal');
+}
+
+async function executeNepo(targetId, gs) {
+  if (!pendingDefuse) return;
+  const bomb = pendingDefuse.drawn;
+
+  // Find nepo baby in hand and remove it (goes to removed from game — don't add to discard)
+  const hand = gs.players[myId].hand;
+  const nepoIdx = hand.findIndex(c => c.id === 'nepo-baby');
+  if (nepoIdx >= 0) hand.splice(nepoIdx, 1);
+  // nepo baby removed from game — not added to discard
+
+  // Send white envelope to target's hand
+  gs.players[targetId].hand.push(bomb);
+  gs.lastAction = `<span class="highlight">${myName}</span> ใช้ 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name}`;
+
+  pendingDefuse = null;
+
+  // Flash effect
+  const flash = document.createElement('div');
+  flash.className = 'nepo-flash';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 600);
+
+  await advanceTurn(gs);
+}
+
+async function eliminateMe() {
+  closeModal('defuseModal');
+  if (!pendingDefuse) return;
+  const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+  pendingDefuse = null;
+
+  // Move hand to discard (except nepo babies)
+  const hand = gs.players[myId].hand || [];
+  const toDiscard = hand.filter(c => c.id !== 'nepo-baby');
+  gs.discard = [...gs.discard, ...toDiscard];
+  gs.players[myId].hand = [];
+  gs.players[myId].eliminated = true;
+  gs.lastAction = `<span style="color:var(--danger)">${myName} ตกรอบ! 📄</span>`;
+
+  document.getElementById('eliminatedOverlay').classList.add('show');
+
+  // Check win condition
+  const remaining = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
+  if (remaining.length === 1) {
+    gs.status = 'finished';
+    await saveGameState(gs);
+    return;
+  }
+
+  // Advance turn, skipping eliminated
+  await advanceTurn(gs);
+}
+
+// ─── Play Card ─────────────────────────────────────────────────────────────
+async function playSelectedCard() {
+  if (!gameState) return;
+  const gs = gameState;
+  if (gs.turnOrder[gs.currentTurnIndex] !== myId) return;
+
+  // Find non-combo card
+  const hand = gs.players[myId].hand || [];
+  const nonComboUid = selectedCards.find(uid => {
+    const c = hand.find(c => c.uid === uid);
+    return c && !COMBO_RESOURCES.includes(c.id);
+  });
+  if (!nonComboUid) return;
+
+  const cardObj = hand.find(c => c.uid === nonComboUid);
+  if (!cardObj) return;
+
+  await executeCardEffect(cardObj);
+}
+
+async function executeCardEffect(cardObj) {
+  const gs = JSON.parse(JSON.stringify(gameState));
+  const card = CARDS[cardObj.id];
+  if (!card) return;
+
+  // Remove card from hand
+  const hand = gs.players[myId].hand;
+  const idx = hand.findIndex(c => c.uid === cardObj.uid);
+  if (idx < 0) return;
+  hand.splice(idx, 1);
+  gs.discard.push(cardObj);
+  selectedCards = [];
+
+  switch (card.type) {
+    case 'ATTACK': await doAttack(gs); break;
+    case 'FUTURE': await doFuture(gs); break;
+    case 'SKIP':   await doSickLeave(gs); break;
+    case 'FAVOR':  await doFavor(gs, cardObj); break;
+    case 'REVERSE': await doReverse(gs); break;
+    case 'DEFUSE':
+      toast('ไม่สามารถเล่นฟ้องกรมแรงงานได้ตอนนี้ (ใช้ตอนจั่วซองขาวเท่านั้น)', 'error');
+      // Undo remove
+      hand.push(cardObj);
+      gs.discard.pop();
+      return;
+    case 'NEPO':
+      toast('เด็กเส้นใช้ได้ตอนจั่วซองขาวเท่านั้น!', 'error');
+      hand.push(cardObj);
+      gs.discard.pop();
+      return;
+    case 'EXPLODING':
+      toast('ซองขาวเล่นเองไม่ได้!', 'error');
+      hand.push(cardObj);
+      gs.discard.pop();
+      return;
+    case 'COMBO':
+      toast('Combo Resource — ใช้กับ Combo เท่านั้น!', 'error');
+      hand.push(cardObj);
+      gs.discard.pop();
+      return;
+    default:
+      toast('ยังไม่รองรับการ์ดนี้', 'warning');
+      hand.push(cardObj);
+      gs.discard.pop();
+      return;
+  }
+}
+
+async function doAttack(gs) {
+  // End turn without drawing, give +2 to next player
+  gs.attackDebt += 2;
+  gs.lastAction = `<span class="highlight">${myName}</span> โยนงาน 📋 (+2 จั่ว!)`;
+
+  // Advance turn (don't draw)
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
+  let nextIdx = gs.currentTurnIndex;
+  do {
+    nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
+  } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
+  gs.currentTurnIndex = nextIdx;
+  gs.turnStartTime = Date.now();
+  await saveGameState(gs);
+}
+
+async function doFuture(gs) {
+  gs.lastAction = `<span class="highlight">${myName}</span> อัญเชิญแม่หมอ 🔮`;
+  const top3 = gs.deck.slice(-3).reverse();
+  await saveGameState(gs);
+  showFutureModal(top3);
+}
+
+function showFutureModal(cards) {
+  const container = document.getElementById('futureCards');
+  container.innerHTML = '';
+  cards.forEach((card, i) => {
+    const c = CARDS[card.id];
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.alignItems = 'center';
+    const div = document.createElement('div');
+    div.className = 'future-card';
+    div.innerHTML = `<img src="${cardImg(card.id)}" alt="${c?.name}" onerror="this.outerHTML='<span style=font-size:1.5rem>${c?.emoji||'?'}</span>'">`;
+    const label = document.createElement('div');
+    label.className = 'future-pos';
+    label.textContent = i === 0 ? '⬆ บนสุด' : `ใบที่ ${i+1}`;
+    wrapper.appendChild(div);
+    wrapper.appendChild(label);
+    container.appendChild(wrapper);
+  });
+  openModal('futureModal');
+}
+
+async function doSickLeave(gs) {
+  gs.players[myId].protected = true;
+  gs.lastAction = `<span class="highlight">${myName}</span> ลาป่วย 🏥 (ป้องกัน 1 รอบ)`;
+  await saveGameState(gs);
+  toast('🏥 ลาป่วยแล้ว! ป้องกัน Favor, Combo 3/4 ในรอบนี้', 'success');
+}
+
+async function doFavor(gs, cardObj) {
+  // Check target player not protected
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId);
+  const validTargets = activePlayers.filter(pid => !gs.players[pid].protected);
+
+  if (validTargets.length === 0) { toast('ไม่มีเป้าหมายที่สามารถใช้ได้!', 'error'); return; }
+
+  // Need to pick target via modal then wait for them to choose card
+  gs.lastAction = `<span class="highlight">${myName}</span> ใช้แลกงาน 🔄 (เลือกเป้าหมาย...)`;
+  await saveGameState(gs);
+
+  showTargetModal('เลือกเป้าหมาย — แลกงาน', validTargets, gs, async (targetId) => {
+    // Host or self-execute: ask target to give card
+    // For simplicity: request card via pendingAction in Firebase
+    const newGs = JSON.parse(JSON.stringify(gameState));
+    newGs.pendingAction = {
+      type: 'FAVOR_REQUEST',
+      from: myId,
+      fromName: myName,
+      to: targetId,
+    };
+    newGs.lastAction = `<span class="highlight">${myName}</span> ขอไพ่จาก ${newGs.players[targetId].name} 🔄`;
+    await saveGameState(newGs);
+  });
+}
+
+async function doReverse(gs) {
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
+  if (activePlayers.length === 2) {
+    // Skip
+    gs.lastAction = `<span class="highlight">${myName}</span> HR ปรับโครงสร้าง 📢 (2 คน = Skip!)`;
+    let nextIdx = gs.currentTurnIndex;
+    do {
+      nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
+    } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
+    do {
+      nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
+    } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
+    gs.currentTurnIndex = nextIdx;
+  } else {
+    gs.direction = gs.direction * -1;
+    gs.lastAction = `<span class="highlight">${myName}</span> HR ปรับโครงสร้าง 📢 (ทิศทางเปลี่ยน!)`;
+    // Transfer attack debt to new direction's next player (stays as-is, next player gets it)
+  }
+  gs.turnStartTime = Date.now();
+  await saveGameState(gs);
+}
+
+// ─── Combo System ──────────────────────────────────────────────────────────
+async function executeCombo() {
+  const gs = JSON.parse(JSON.stringify(gameState));
+  const hand = gs.players[myId].hand || [];
+  const comboCards = selectedCards.map(uid => hand.find(c => c.uid === uid)).filter(Boolean);
+  const comboResCards = comboCards.filter(c => COMBO_RESOURCES.includes(c.id));
+  const n = comboResCards.length;
+
+  if (n < 2) { toast('ต้องการ Combo Resource อย่างน้อย 2 ใบ!', 'error'); return; }
+
+  // Remove combo cards from hand
+  comboResCards.forEach(cc => {
+    const idx = hand.findIndex(c => c.uid === cc.uid);
+    if (idx >= 0) { gs.discard.push(hand.splice(idx, 1)[0]); }
+  });
+  selectedCards = [];
+
+  if (n === 2) await doCombo2(gs, comboResCards);
+  else if (n === 3) await doCombo3(gs, comboResCards);
+  else if (n === 4) await doCombo4(gs, comboResCards);
+  else if (n >= 5) await doCombo5(gs, comboResCards);
+}
+
+async function doCombo2(gs, cards) {
+  // Normal: look at 2, keep 1
+  const top2 = gs.deck.slice(-2).reverse();
+  if (top2.length === 0) { toast('กองไพ่ว่าง!', 'warning'); return; }
+  gs.lastAction = `<span class="highlight">${myName}</span> Combo 2 🥤🥤 ดูไพ่ 2 ใบ`;
+  await saveGameState(gs);
+  // For now, draw the top card (simplified - full combo2 would need interaction)
+  showCombo2Modal(gs, top2);
+}
+
+function showCombo2Modal(gs, cards) {
+  // Simple: show top 2, let player pick 1 to take
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🥤 Combo 2 — เลือก 1 ใบ</div>
+      <div style="display:flex;gap:12px;justify-content:center;margin-bottom:16px;">
+        ${cards.map((c,i) => {
+          const cd = CARDS[c.id];
+          return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;" onclick="window._combo2Pick(${i})">
+            <div class="future-card"><img src="${cardImg(c.id)}" alt="${cd?.name}" onerror="this.outerHTML='<span style=font-size:2rem>${cd?.emoji}</span>'"></div>
+            <div style="font-size:0.75rem;color:var(--text2)">${cd?.name}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  window._combo2Pick = async (chosenIdx) => {
+    document.body.removeChild(overlay);
+    const newGs = JSON.parse(JSON.stringify(gameState));
+    const hand = newGs.players[myId].hand;
+    // Remove top 2 from deck, put unchosen back
+    const picked = newGs.deck.pop();
+    if (cards.length > 1) {
+      const other = newGs.deck.pop();
+      const otherCard = chosenIdx === 0 ? (cards.length > 1 ? cards[1] : null) : cards[0];
+      // Put back the one not chosen
+      if (chosenIdx === 0) {
+        if (cards[1]) newGs.deck.push(cards[1]);
+      } else {
+        newGs.deck.push(cards[0]);
+      }
+      hand.push(cards[chosenIdx]);
+    } else {
+      hand.push(picked);
+    }
+    newGs.lastAction = `<span class="highlight">${myName}</span> Combo 2 — หยิบไพ่ 1 ใบ!`;
+    await saveGameState(newGs);
+  };
+}
+
+async function doCombo3(gs, cards) {
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId && !gs.players[pid].protected);
+  if (activePlayers.length === 0) { toast('ไม่มีเป้าหมายที่ใช้ได้!', 'error'); return; }
+
+  gs.lastAction = `<span class="highlight">${myName}</span> Combo 3 — เรียกชื่อการ์ด...`;
+  await saveGameState(gs);
+
+  // Show card name picker
+  showCombo3Modal(gs, activePlayers);
+}
+
+function showCombo3Modal(gs, targets) {
+  const container = document.getElementById('combo3CardSelector');
+  container.innerHTML = '';
+
+  const cardTypes = Object.values(CARDS).filter(c => !['white-envelope','nepo-baby'].includes(c.id));
+  cardTypes.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'card-sel-item';
+    item.innerHTML = `<img src="${cardImg(c.id)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" onerror="this.outerHTML='<span class=emoji>${c.emoji}</span>'"><span class="name">${c.name}</span>`;
+    item.onclick = () => {
+      closeModal('combo3Modal');
+      // Pick target
+      showTargetModal('เลือกเป้าหมาย', targets, gs, async (targetId) => {
+        const newGs = JSON.parse(JSON.stringify(gameState));
+        const targetHand = newGs.players[targetId].hand || [];
+        const hasCard = targetHand.find(tc => tc.id === c.id);
+        if (hasCard) {
+          // Take it
+          const idx = targetHand.findIndex(tc => tc.id === c.id);
+          targetHand.splice(idx, 1);
+          newGs.players[myId].hand.push(hasCard);
+          newGs.lastAction = `<span class="highlight">${myName}</span> Combo 3 ✓ ได้ ${c.emoji} ${c.name}!`;
+        } else {
+          // Random steal 2
+          for (let i = 0; i < 2; i++) {
+            if (targetHand.length === 0) break;
+            const ri = Math.floor(Math.random() * targetHand.length);
+            const stolen = targetHand.splice(ri, 1)[0];
+            newGs.players[myId].hand.push(stolen);
+          }
+          newGs.lastAction = `<span class="highlight">${myName}</span> Combo 3 ✗ ไม่มี ${c.name} สุ่มขโมย 2 ใบ!`;
+        }
+        await saveGameState(newGs);
+      });
+    };
+    container.appendChild(item);
+  });
+
+  document.getElementById('btnCombo3Cancel').onclick = () => closeModal('combo3Modal');
+  openModal('combo3Modal');
+}
+
+async function doCombo4(gs, cards) {
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId && !gs.players[pid].protected);
+  if (activePlayers.length === 0) { toast('ไม่มีเป้าหมายที่ใช้ได้!', 'error'); return; }
+
+  gs.lastAction = `<span class="highlight">${myName}</span> Combo 4 — เลือกเป้าหมาย...`;
+  await saveGameState(gs);
+
+  showTargetModal('เลือกเป้าหมาย — Combo 4', activePlayers, gs, async (targetId) => {
+    const newGs = JSON.parse(JSON.stringify(gameState));
+    const targetHand = newGs.players[targetId].hand || [];
+    const targetName = newGs.players[targetId].name;
+
+    // Show target's hand and let player pick
+    document.getElementById('combo4TargetName').textContent = `มือของ ${targetName}`;
+    const container = document.getElementById('combo4Cards');
+    container.innerHTML = '';
+
+    if (targetHand.length === 0) { toast(`${targetName} ไม่มีไพ่ในมือ!`, 'warning'); return; }
+
+    targetHand.forEach((tc, i) => {
+      const cd = CARDS[tc.id];
+      const div = document.createElement('div');
+      div.className = 'hand-card';
+      div.style.width = '80px'; div.style.height = '112px';
+      div.innerHTML = `<img src="${cardImg(tc.id)}" alt="${cd?.name}" onerror="this.outerHTML='<span class=hand-card-emoji>${cd?.emoji}</span>'">`;
+      div.onclick = async () => {
+        closeModal('combo4Modal');
+        const latestGs = JSON.parse(JSON.stringify(gameState));
+        const latestHand = latestGs.players[targetId].hand || [];
+        const stealIdx = latestHand.findIndex(c => c.uid === tc.uid);
+        if (stealIdx >= 0) {
+          const stolen = latestHand.splice(stealIdx, 1)[0];
+          latestGs.players[myId].hand.push(stolen);
+          latestGs.lastAction = `<span class="highlight">${myName}</span> Combo 4 ขโมย ${cd?.emoji} ${cd?.name} จาก ${targetName}!`;
+        }
+        await saveGameState(latestGs);
+      };
+      container.appendChild(div);
+    });
+
+    document.getElementById('btnCombo4Cancel').onclick = () => closeModal('combo4Modal');
+    openModal('combo4Modal');
+  });
+}
+
+async function doCombo5(gs, cards) {
+  const discard = gs.discard.filter(c => c.id !== 'nepo-baby');
+  if (discard.length === 0) { toast('กองทิ้งว่าง!', 'warning'); return; }
+
+  gs.lastAction = `<span class="highlight">${myName}</span> Combo 5 — เลือกจากกองทิ้ง...`;
+  await saveGameState(gs);
+
+  const container = document.getElementById('combo5Grid');
+  container.innerHTML = '';
+
+  // Show unique cards in discard (from newest)
+  const shown = [...discard].reverse().slice(0, 20);
+  shown.forEach(dc => {
+    const cd = CARDS[dc.id];
+    const div = document.createElement('div');
+    div.className = 'discard-grid-card';
+    div.innerHTML = `<img src="${cardImg(dc.id)}" alt="${cd?.name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span>${cd?.emoji||'?'}</span>'">`;
+    div.onclick = async () => {
+      closeModal('combo5Modal');
+      const newGs = JSON.parse(JSON.stringify(gameState));
+      const discardArr = newGs.discard;
+      const idx = discardArr.findIndex(c => c.uid === dc.uid);
+      if (idx >= 0) {
+        const taken = discardArr.splice(idx, 1)[0];
+        newGs.players[myId].hand.push(taken);
+        newGs.lastAction = `<span class="highlight">${myName}</span> Combo 5 หยิบ ${cd?.emoji} ${cd?.name} จากกองทิ้ง!`;
+      }
+      await saveGameState(newGs);
+    };
+    container.appendChild(div);
+  });
+
+  document.getElementById('btnCombo5Cancel').onclick = () => closeModal('combo5Modal');
+  openModal('combo5Modal');
+}
+
+// ─── Favor Response ────────────────────────────────────────────────────────
+function checkPendingActions(prevState) {
+  if (!gameState?.pendingAction) return;
+  const pa = gameState.pendingAction;
+
+  if (pa.type === 'FAVOR_REQUEST' && pa.to === myId) {
+    const hand = gameState.players[myId].hand || [];
+    if (hand.length === 0) {
+      // Auto-resolve: nothing to give
+      resolveFavor(null);
+      return;
+    }
+    showFavorResponse(pa.from, pa.fromName, hand);
+  }
+}
+
+function showFavorResponse(fromId, fromName, hand) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.id = 'favorResponseModal';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🔄 ${fromName} ขอไพ่ 1 ใบ!</div>
+      <div class="text-muted text-center" style="margin-bottom:12px;">เลือกการ์ดที่จะให้</div>
+      <div class="hand-cards" style="flex-wrap:wrap;" id="favorHandCards"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const hc = overlay.querySelector('#favorHandCards');
+  hand.forEach(card => {
+    const c = CARDS[card.id];
+    const div = document.createElement('div');
+    div.className = 'hand-card';
+    div.style.width = '80px'; div.style.height = '112px';
+    div.innerHTML = `<img src="${cardImg(card.id)}" alt="${c?.name}" onerror="this.outerHTML='<span class=hand-card-emoji>${c?.emoji}</span>'">`;
+    div.onclick = async () => {
+      overlay.remove();
+      await resolveFavor(card, fromId);
+    };
+    hc.appendChild(div);
+  });
+}
+
+async function resolveFavor(card, fromId) {
+  const newGs = JSON.parse(JSON.stringify(gameState));
+  if (card && fromId) {
+    const myHand = newGs.players[myId].hand;
+    const idx = myHand.findIndex(c => c.uid === card.uid);
+    if (idx >= 0) {
+      const given = myHand.splice(idx, 1)[0];
+      newGs.players[fromId].hand.push(given);
+      newGs.lastAction = `<span class="highlight">${myName}</span> ให้ ${CARDS[given.id]?.emoji} ${CARDS[given.id]?.name} แก่ ${newGs.players[fromId].name}`;
+    }
+  }
+  newGs.pendingAction = null;
+  await saveGameState(newGs);
+}
+
+// ─── Advance Turn ──────────────────────────────────────────────────────────
+async function advanceTurn(gs) {
+  // Clear protection for current player after their turn ends
+  gs.players[myId].protected = false;
+
+  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
+  if (activePlayers.length <= 1) {
+    gs.status = 'finished';
+    if (activePlayers.length === 1) {
+      gs.lastAction = `🏆 <span class="highlight">${gs.players[activePlayers[0]].name}</span> ชนะเกม!`;
+    }
+    await saveGameState(gs);
+    return;
+  }
+
+  // Attack debt: if next player has debt, keep it
+  let nextIdx = gs.currentTurnIndex;
+  do {
+    nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
+  } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
+
+  gs.currentTurnIndex = nextIdx;
+  gs.turnStartTime = Date.now();
+  await saveGameState(gs);
+}
+
+// ─── Target Modal Helper ───────────────────────────────────────────────────
+function showTargetModal(title, playerIds, gs, onSelect) {
+  document.getElementById('targetModalTitle').textContent = title;
+  const list = document.getElementById('targetList');
+  list.innerHTML = '';
+
+  playerIds.forEach(pid => {
+    const p = gs.players[pid];
+    const item = document.createElement('div');
+    item.className = 'target-item';
+    item.innerHTML = `<div class="target-avatar">👤</div><div class="target-name">${p.name}</div><div class="target-count">${(p.hand||[]).length} ใบ</div>`;
+    item.onclick = () => { closeModal('targetModal'); onSelect(pid); };
+    list.appendChild(item);
+  });
+
+  document.getElementById('btnTargetCancel').onclick = () => closeModal('targetModal');
+  openModal('targetModal');
+}
+
+// ─── Discard Viewer ────────────────────────────────────────────────────────
+function showDiscardViewer() {
+  if (!gameState) return;
+  const grid = document.getElementById('discardGrid');
+  grid.innerHTML = '';
+  const discard = [...(gameState.discard || [])].reverse();
+  discard.forEach(dc => {
+    const cd = CARDS[dc.id];
+    const div = document.createElement('div');
+    div.className = 'discard-grid-card';
+    div.innerHTML = `<img src="${cardImg(dc.id)}" alt="${cd?.name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span style=font-size:1.5rem>${cd?.emoji||'?'}</span>'">`;
+    grid.appendChild(div);
+  });
+  if (discard.length === 0) grid.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px;grid-column:span 4">ยังไม่มีไพ่ในกองทิ้ง</div>';
+  openModal('discardModal');
+}
+
+// ─── Save Game State ────────────────────────────────────────────────────────
+async function saveGameState(gs) {
+  gs.version = (gs.version || 0) + 1;
+  await set(ref(db, `rooms/${roomCode}/gameState`), gs);
+}
+
+// ─── Event Listeners ────────────────────────────────────────────────────────
+document.getElementById('btnCreate').onclick = async () => {
+  const name = document.getElementById('playerName').value.trim();
+  if (!name) { toast('ใส่ชื่อก่อน!', 'error'); return; }
+  await createRoom(name);
+};
+
+document.getElementById('btnJoin').onclick = async () => {
+  const name = document.getElementById('playerName').value.trim();
+  const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+  if (!name) { toast('ใส่ชื่อก่อน!', 'error'); return; }
+  if (code.length !== 4) { toast('รหัสห้องต้อง 4 ตัว!', 'error'); return; }
+  await joinRoom(code, name);
+};
+
+document.getElementById('playerName').addEventListener('keypress', e => {
+  if (e.key === 'Enter') document.getElementById('btnCreate').click();
+});
+document.getElementById('roomCodeInput').addEventListener('keypress', e => {
+  if (e.key === 'Enter') document.getElementById('btnJoin').click();
+});
+document.getElementById('roomCodeInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase();
+});
+
+document.getElementById('btnReady').onclick = async () => {
+  const snap = await get(ref(db, `rooms/${roomCode}/players/${myId}/ready`));
+  const current = snap.val();
+  await set(ref(db, `rooms/${roomCode}/players/${myId}/ready`), !current);
+  document.getElementById('btnReady').textContent = !current ? '✅ พร้อมแล้ว (คลิกยกเลิก)' : '✅ พร้อมแล้ว';
+};
+
+document.getElementById('btnStartGame').onclick = hostStartGame;
+
+document.getElementById('btnLeaveRoom').onclick = async () => {
+  if (isHost) {
+    await remove(ref(db, `rooms/${roomCode}`));
+  } else {
+    await remove(ref(db, `rooms/${roomCode}/players/${myId}`));
+  }
+  showScreen('homeScreen');
+};
+
+document.getElementById('btnCopyCode').onclick = () => {
+  const code = document.getElementById('displayRoomCode').textContent;
+  const url = `${location.href.split('?')[0]}?room=${code}`;
+  navigator.clipboard.writeText(url).then(() => toast('คัดลอก link แล้ว! 📋', 'success'));
+};
+
+document.getElementById('btnPlayCard').onclick = playSelectedCard;
+document.getElementById('btnCombo').onclick = executeCombo;
+document.getElementById('btnDraw').onclick = drawCard;
+document.getElementById('deckPile').onclick = drawCard;
+document.getElementById('discardPile').onclick = showDiscardViewer;
+
+document.getElementById('btnCardDetailClose').onclick = () => closeModal('cardDetailModal');
+document.getElementById('btnFutureClose').onclick = () => closeModal('futureModal');
+document.getElementById('btnDiscardClose').onclick = () => closeModal('discardModal');
+
+document.getElementById('btnDismissEliminated').onclick = () => {
+  document.getElementById('eliminatedOverlay').classList.remove('show');
+};
+
+document.getElementById('btnPlayAgain').onclick = async () => {
+  document.getElementById('winnerOverlay').classList.remove('show');
+  if (isHost) {
+    await update(ref(db, `rooms/${roomCode}`), { status: 'lobby', gameState: null });
+    showScreen('roomScreen');
+  } else {
+    showScreen('roomScreen');
+  }
+};
+
+document.getElementById('btnBackHome').onclick = () => {
+  document.getElementById('winnerOverlay').classList.remove('show');
+  showScreen('homeScreen');
+};
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+// Check URL params for room join
+const urlParams = new URLSearchParams(location.search);
+const urlRoom = urlParams.get('room');
+if (urlRoom) {
+  document.getElementById('roomCodeInput').value = urlRoom.toUpperCase();
+}
+
+// Show home screen after brief loading
+setTimeout(() => {
+  showScreen('homeScreen');
+}, 800);
+</script>
+</body>
+</html>
