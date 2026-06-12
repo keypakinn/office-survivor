@@ -815,6 +815,9 @@
     </div>
   </div>
 
+  <!-- Spectator bar (BUG-028) -->
+  <div id="spectatorBar" style="display:none;background:rgba(233,69,96,0.15);border-top:1px solid var(--accent);padding:8px 16px;justify-content:space-between;align-items:center;font-weight:600;font-size:0.9rem;color:var(--accent);flex-shrink:0;"></div>
+
   <!-- Action bar -->
   <div class="action-bar">
     <button class="btn btn-ghost" id="btnPlayCard" disabled>🃏 เล่นการ์ด</button>
@@ -993,10 +996,22 @@
 <!-- ══════════════════════════════════════ -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, set, get, push, onValue, update, remove, serverTimestamp, off }
+import { getDatabase, ref, set, get, onValue, update, remove, serverTimestamp, off }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
-// ─── Firebase Config ───────────────────────────────────────────────────────
+// ─── Firebase ────────────────────────────────────────────────────────────────
+// BUG-048: Firebase Security Rules should be set in Firebase Console:
+// {
+//   "rules": {
+//     "rooms": {
+//       "$roomId": {
+//         ".read": true,
+//         ".write": true,
+//         ".validate": "newData.hasChildren(['code','status'])"
+//       }
+//     }
+//   }
+// }
 const firebaseConfig = {
   apiKey: "AIzaSyCJxYJFoxR_SeOwctnC44I3YVUszsuFACU",
   authDomain: "office-survivor-d2a5e.firebaseapp.com",
@@ -1007,121 +1022,133 @@ const firebaseConfig = {
   appId: "1:392444048004:web:8123ac036fdd5ae97508d1",
   measurementId: "G-6F9GQ5FR00"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// ─── Card Definitions ──────────────────────────────────────────────────────
+// ─── Card Definitions ─────────────────────────────────────────────────────────
 const CARDS = {
-  'white-envelope': { id:'white-envelope', name:'ซองขาว', emoji:'📄', type:'EXPLODING', effect:'หากจั่วได้ ต้องใช้ฟ้องกรมแรงงาน/ร้องเรียนผู้บริหาร/เด็กเส้น ไม่งั้นตกรอบ!', file:'white-envelope.png' },
-  'labor-lawsuit':  { id:'labor-lawsuit',  name:'ฟ้องกรมแรงงาน', emoji:'⚖️', type:'DEFUSE',  effect:'ป้องกันซองขาว แทรกซองขาวกลับกองได้ทุกตำแหน่ง', file:'labor-lawsuit.png' },
-  'throw-work':     { id:'throw-work',     name:'โยนงาน', emoji:'📋', type:'ATTACK',  effect:'จบเทิร์นทันที ไม่ต้องจั่ว ส่ง +2 ให้ผู้เล่นถัดไป', file:'throw-work.png' },
-  'fortune-teller': { id:'fortune-teller', name:'อัญเชิญแม่หมอ', emoji:'🔮', type:'FUTURE',   effect:'ดูไพ่บนสุด 3 ใบ', file:'fortune-teller.png' },
-  'sick-leave':     { id:'sick-leave',     name:'ลาป่วย', emoji:'🏥', type:'SKIP',    effect:'ป้องกัน: แลกงาน, Combo 3, Combo 4, เด็กเส้น', file:'sick-leave.png' },
-  'work-swap':      { id:'work-swap',      name:'แลกงาน', emoji:'🔄', type:'FAVOR',   effect:'เลือกผู้เล่น ผู้เล่นนั้นส่งไพ่ 1 ใบให้คุณ', file:'work-swap.png' },
-  'hr-restructure': { id:'hr-restructure', name:'HR ปรับโครงสร้าง', emoji:'📢', type:'REVERSE',  effect:'เปลี่ยนทิศทาง (2 คน = Skip) ส่ง Attack Debt ตามทิศทางใหม่', file:'hr-restructure.png' },
-  'nepo-baby':      { id:'nepo-baby',      name:'เด็กเส้น', emoji:'👶', type:'NEPO',    effect:'ใช้ตอนจั่วซองขาว (ไม่มีฟ้องกรมแรงงาน) ส่งซองขาวให้คนอื่น', file:'nepo-baby.png' },
-  'green-tea':      { id:'green-tea',      name:'ชาเขียว', emoji:'🥤', type:'COMBO',   effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว', file:'green-tea.png' },
-  'bubble-tea':     { id:'bubble-tea',     name:'ชานมไข่มุก', emoji:'🧋', type:'COMBO',   effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว', file:'bubble-tea.png' },
-  'cocoa':          { id:'cocoa',          name:'โกโก้ปั่น', emoji:'🍫', type:'COMBO',   effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว', file:'cocoa.png' },
+  'white-envelope': { id:'white-envelope', name:'ซองขาว',           emoji:'📄', type:'EXPLODING', effect:'จั่วได้ = ต้องใช้การ์ดป้องกัน ไม่งั้นตกรอบ!',                    file:'white-envelope.png' },
+  'labor-lawsuit':  { id:'labor-lawsuit',  name:'ฟ้องกรมแรงงาน',   emoji:'⚖️', type:'DEFUSE',    effect:'ป้องกันซองขาว แทรกซองขาวกลับกองได้ทุกตำแหน่ง',                    file:'labor-lawsuit.png'  },
+  'throw-work':     { id:'throw-work',     name:'โยนงาน',           emoji:'📋', type:'ATTACK',    effect:'จบเทิร์นทันที ไม่ต้องจั่ว ส่ง +2 ให้ผู้เล่นถัดไป (สะสมได้)',     file:'throw-work.png'     },
+  'fortune-teller': { id:'fortune-teller', name:'อัญเชิญแม่หมอ',   emoji:'🔮', type:'FUTURE',    effect:'ดูไพ่บนสุด 3 ใบในกองไพ่',                                          file:'fortune-teller.png' },
+  'sick-leave':     { id:'sick-leave',     name:'ลาป่วย',           emoji:'🏥', type:'SICK',      effect:'ป้องกัน: แลกงาน, Combo3, Combo4, เด็กเส้น จนถึงเทิร์นถัดไป',     file:'sick-leave.png'     },
+  'work-swap':      { id:'work-swap',      name:'แลกงาน',           emoji:'🔄', type:'FAVOR',     effect:'เลือกผู้เล่น ผู้เล่นนั้นต้องส่งไพ่ 1 ใบให้คุณ',                   file:'work-swap.png'      },
+  'hr-restructure': { id:'hr-restructure', name:'HR ปรับโครงสร้าง', emoji:'📢', type:'REVERSE',   effect:'เปลี่ยนทิศทาง (2 คน = Skip) และส่ง Attack Debt ตามทิศทางใหม่',    file:'hr-restructure.png' },
+  'nepo-baby':      { id:'nepo-baby',      name:'เด็กเส้น',         emoji:'👶', type:'NEPO',      effect:'ใช้ตอนจั่วซองขาว (ไม่มีฟ้อง) ส่งซองขาวให้คนอื่น แล้วการ์ดหายไป', file:'nepo-baby.png'      },
+  'green-tea':      { id:'green-tea',      name:'ชาเขียว',          emoji:'🥤', type:'COMBO',     effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว',     file:'green-tea.png'      },
+  'bubble-tea':     { id:'bubble-tea',     name:'ชานมไข่มุก',       emoji:'🧋', type:'COMBO',     effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว',     file:'bubble-tea.png'     },
+  'cocoa':          { id:'cocoa',          name:'โกโก้ปั่น',        emoji:'🍫', type:'COMBO',     effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว',     file:'cocoa.png'          },
 };
-
 const COMBO_RESOURCES = ['green-tea','bubble-tea','cocoa'];
-const ASSET_PATH = '/office-survivor/assets/cards/';
+const _repo = location.pathname.split('/').filter(Boolean)[0] || 'office-survivor';
+const ASSET_PATH = location.hostname.includes('github.io') ? `/${_repo}/assets/cards/` : './assets/cards/';
 
-function cardImg(cardId) {
-  const c = CARDS[cardId];
-  if (!c) return null;
-  return ASSET_PATH + c.file;
+function cardImg(id) {
+  const c = CARDS[id]; return c ? ASSET_PATH + c.file : '';
 }
 
-// ─── Deck Builder ──────────────────────────────────────────────────────────
-function buildDeck(playerCount) {
+// ─── Deck Builder ─────────────────────────────────────────────────────────────
+function buildDeck(n) {
   const deck = [];
-  const add = (id, n) => { for(let i=0;i<n;i++) deck.push({id, uid: Math.random().toString(36).slice(2)}); };
-  // Main cards (no exploding/defuse/nepo - those are added separately)
-  add('throw-work', 4);
-  add('fortune-teller', 5);
-  add('sick-leave', 4);
-  add('work-swap', 4);
-  add('hr-restructure', 4);
-  add('green-tea', 5);
-  add('bubble-tea', 5);
-  add('cocoa', 5);
+  const add = (id, count) => { for(let i=0;i<count;i++) deck.push({id, uid: uid()}); };
+  // PHASE X: Auto Scale Deck Formula
+  add('throw-work',     n + 5);
+  add('fortune-teller', n + 5);
+  add('sick-leave',     n + 5);
+  add('work-swap',      n + 5);
+  add('hr-restructure', n + 5);
+  add('green-tea',      n * 2);
+  add('bubble-tea',     n * 2);
+  add('cocoa',          n * 2);
   return shuffle(deck);
+}
+
+// Validate deck counts (called after full deck assembly)
+function validateDeck(deck, n) {
+  const counts = {};
+  deck.forEach(c => counts[c.id] = (counts[c.id]||0) + 1);
+  const errors = [];
+  if (counts['white-envelope'] !== n-1)
+    errors.push(`ซองขาว: expected ${n-1}, got ${counts['white-envelope']||0}`);
+  if (counts['nepo-baby'] !== Math.max(2, Math.floor(n/3)))
+    errors.push(`เด็กเส้น: expected ${Math.max(2, Math.floor(n/3))}, got ${counts['nepo-baby']||0}`);
+  ['throw-work','fortune-teller','sick-leave','work-swap','hr-restructure'].forEach(id => {
+    if (counts[id] !== n+5) errors.push(`${id}: expected ${n+5}, got ${counts[id]||0}`);
+  });
+  ['green-tea','bubble-tea','cocoa'].forEach(id => {
+    if (counts[id] !== n*2) errors.push(`${id}: expected ${n*2}, got ${counts[id]||0}`);
+  });
+  if (errors.length > 0) console.warn('Deck validation errors:', errors);
+  return errors.length === 0;
 }
 
 function shuffle(arr) {
   const a = [...arr];
-  for(let i=a.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
   return a;
 }
 
-// ─── Game State ─────────────────────────────────────────────────────────────
-let myId = null;
-let myName = '';
-let roomCode = null;
-let isHost = false;
+// ─── State ────────────────────────────────────────────────────────────────────
+let myId = null, myName = '', roomCode = null, isHost = false;
 let gameState = null;
-let selectedCards = [];
-let comboMode = false;
+let selectedCards = [];           // array of card UIDs selected in hand
 let timerInterval = null;
 let unsubscribers = [];
-let pendingDefuse = null;
-let pendingNepo = null;
-let counterAvailable = false;
-let counterResolveTimeout = null;
-let executorTimeout = null;
-let sickLeaveActive = false; // track my protection
+let pendingDefuse = null;         // { gs, drawn } waiting for defuse decision
+let isDrawing = false;            // BUG-001 race condition guard
+let isPlayingCard = false;        // race condition guard for play
+let favorResponseOpen = false;    // BUG-008 favor modal dedup
 
-// ─── Utility ──────────────────────────────────────────────────────────────
-function uid() { return Math.random().toString(36).slice(2,9); }
+// ─── Utility ──────────────────────────────────────────────────────────────────
+function uid() { return Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
 
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
 
 let toastTimeout;
 function toast(msg, type='info', dur=2500) {
   const el = document.getElementById('toast');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => el.classList.remove('show'), dur);
+  el.className = `toast ${type}`; el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimeout); toastTimeout = setTimeout(()=>el.classList.remove('show'), dur);
 }
 
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function openModal(id)  { document.getElementById(id).classList.add('open');    }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
-function buildCardHTML(cardId, opts={}) {
+function cardThumb(cardId, size=90) {
   const c = CARDS[cardId];
   if (!c) return '';
-  const imgPath = cardImg(cardId);
-  return `<img src="${imgPath}" alt="${c.name}" onerror="this.parentElement.classList.add('no-image');this.outerHTML='<span class=\\'hand-card-emoji\\'>${c.emoji}</span><span class=\\'hand-card-name\\'>${c.name}</span>'">`;
+  return `<img src="${cardImg(cardId)}" alt="${c.name}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;"
+    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:100%;">
+      <span style="font-size:${size>70?'1.8':'1.2'}rem">${c.emoji}</span>
+      <span style="font-size:0.55rem;text-align:center;color:var(--text);font-weight:700;padding:0 4px">${c.name}</span>
+    </div>`;
 }
 
-// ─── Room Creation ─────────────────────────────────────────────────────────
-async function createRoom(name) {
-  myId = uid();
-  myName = name;
-  isHost = true;
-  roomCode = Math.random().toString(36).slice(2,6).toUpperCase();
+async function saveGameState(gs) {
+  gs.version = (gs.version||0)+1;
+  await set(ref(db, `rooms/${roomCode}/gameState`), gs);
+}
 
-  const roomData = {
-    code: roomCode,
-    host: myId,
-    status: 'lobby',
-    createdAt: serverTimestamp(),
-    players: {
-      [myId]: { name, ready: false, host: true, order: 0 }
-    }
-  };
-  await set(ref(db, `rooms/${roomCode}`), roomData);
+// ─── Room / Lobby ─────────────────────────────────────────────────────────────
+async function createRoom(name) {
+  myId = uid(); myName = name; isHost = true;
+  // BUG-056: check for collision before creating room
+  let attempts = 0;
+  do {
+    roomCode = Math.random().toString(36).slice(2,6).toUpperCase();
+    const existing = await get(ref(db, `rooms/${roomCode}`));
+    if (!existing.exists()) break;
+    attempts++;
+  } while (attempts < 10);
+  await set(ref(db, `rooms/${roomCode}`), {
+    code: roomCode, host: myId, status: 'lobby', createdAt: serverTimestamp(),
+    players: { [myId]: { name, ready: false, host: true, order: 0 } }
+  });
+  saveSession();
   listenRoom(roomCode);
   document.getElementById('displayRoomCode').textContent = roomCode;
   showScreen('roomScreen');
@@ -1129,49 +1156,45 @@ async function createRoom(name) {
 
 async function joinRoom(code, name) {
   const snap = await get(ref(db, `rooms/${code}`));
-  if (!snap.exists()) { toast('ไม่พบห้องนี้ 😢', 'error'); return; }
+  if (!snap.exists()) { toast('ไม่พบห้องนี้ 😢','error'); return; }
   const room = snap.val();
-  if (room.status !== 'lobby') { toast('เกมเริ่มแล้ว ไม่สามารถเข้าได้', 'error'); return; }
-  const playerCount = Object.keys(room.players || {}).length;
-  if (playerCount >= 20) { toast('ห้องเต็มแล้ว (สูงสุด 20 คน)', 'error'); return; }
-
-  myId = uid();
-  myName = name;
-  isHost = false;
-  roomCode = code;
-
-  await set(ref(db, `rooms/${code}/players/${myId}`), {
-    name, ready: false, host: false, order: playerCount
-  });
+  if (room.status !== 'lobby') { toast('เกมเริ่มแล้ว ไม่สามารถเข้าได้','error'); return; }
+  const pc = Object.keys(room.players||{}).length;
+  if (pc >= 20) { toast('ห้องเต็ม (สูงสุด 20 คน)','error'); return; }
+  myId = uid(); myName = name; isHost = false; roomCode = code;
+  await set(ref(db, `rooms/${code}/players/${myId}`), { name, ready: false, host: false, order: pc });
+  saveSession();
   listenRoom(code);
   document.getElementById('displayRoomCode').textContent = code;
   showScreen('roomScreen');
 }
 
-// ─── Lobby Listener ────────────────────────────────────────────────────────
 function listenRoom(code) {
   const r = ref(db, `rooms/${code}`);
   const unsub = onValue(r, snap => {
-    if (!snap.exists()) { toast('ห้องถูกปิดแล้ว', 'error'); showScreen('homeScreen'); return; }
+    if (!snap.exists()) { toast('ห้องถูกปิดแล้ว','error'); clearSession(); showScreen('homeScreen'); return; }
     const room = snap.val();
-    renderLobby(room);
+    // BUG-058: detect if I became host (host reassigned)
+    if (room.host === myId && !isHost) {
+      isHost = true;
+      saveSession();
+      toast('คุณเป็น Host คนใหม่แล้ว! 👑','success');
+    }
+    if (room.status === 'lobby') renderLobby(room);
     if (room.status === 'playing' && room.gameState) {
-      gameState = room.gameState;
-      startGame();
+      gameState = room.gameState; startGame();
     }
   });
-  unsubscribers.push(() => off(r));
+  unsubscribers.push(()=>off(r));
 }
 
 function renderLobby(room) {
   const players = room.players || {};
   const list = document.getElementById('lobbyPlayersList');
   list.innerHTML = '';
-
-  const allReady = Object.entries(players).every(([pid, p]) => pid === room.host || p.ready);
+  const allReady = Object.entries(players).every(([pid,p]) => pid===room.host || p.ready);
   const count = Object.keys(players).length;
-
-  Object.entries(players).forEach(([pid, p]) => {
+  Object.entries(players).forEach(([pid,p]) => {
     const div = document.createElement('div');
     div.className = `player-item ${pid===myId?'me':''}`;
     const badges = [];
@@ -1179,11 +1202,9 @@ function renderLobby(room) {
     if (pid===myId) badges.push(`<span class="player-badge badge-me">คุณ</span>`);
     if (p.ready) badges.push(`<span class="player-badge badge-ready">✓ พร้อม</span>`);
     else if (!p.host) badges.push(`<span class="player-badge badge-waiting">รอ...</span>`);
-    div.innerHTML = `<span class="player-name">${p.name}</span><div style="display:flex;gap:4px;">${badges.join('')}</div>`;
+    div.innerHTML = `<span class="player-name">${p.name}</span><div style="display:flex;gap:4px">${badges.join('')}</div>`;
     list.appendChild(div);
   });
-
-  // Host controls
   const startBtn = document.getElementById('btnStartGame');
   const waitText = document.getElementById('waitingText');
   if (isHost) {
@@ -1200,73 +1221,54 @@ function renderLobby(room) {
   }
 }
 
-// ─── Game Start (Host) ─────────────────────────────────────────────────────
+// ─── Game Start ───────────────────────────────────────────────────────────────
 async function hostStartGame() {
   const snap = await get(ref(db, `rooms/${roomCode}/players`));
   const playersObj = snap.val();
-  const playerIds = Object.keys(playersObj);
-  const shuffledIds = shuffle(playerIds);
-
-  const deck = buildDeck(shuffledIds.length);
-
-  // Deal 5 cards + 1 defuse each
+  const playerIds = shuffle(Object.keys(playersObj));
+  const n = playerIds.length;
+  const deck = buildDeck(n);
   const hands = {};
-  shuffledIds.forEach(pid => { hands[pid] = []; });
-
-  for(let i=0;i<5;i++) {
-    shuffledIds.forEach(pid => {
-      if(deck.length) hands[pid].push(deck.pop());
-    });
-  }
-  shuffledIds.forEach(pid => {
-    hands[pid].push({id:'labor-lawsuit', uid: uid()});
-  });
-
-  // Add exploding kittens (= playerCount - 1) and 2 nepo babies
+  playerIds.forEach(pid => { hands[pid] = []; });
+  // 5 random cards each
+  for(let i=0;i<5;i++) playerIds.forEach(pid=>{ if(deck.length) hands[pid].push(deck.pop()); });
+  // 1 defuse each (dealt outside deck)
+  playerIds.forEach(pid => hands[pid].push({id:'labor-lawsuit', uid: uid()}));
+  // bombs = n-1, nepo = max(2, floor(n/3))
+  const nepoCnt = Math.max(2, Math.floor(n/3));
   const bombs = [];
-  for(let i=0;i<shuffledIds.length-1;i++) bombs.push({id:'white-envelope', uid: uid()});
-  for(let i=0;i<2;i++) bombs.push({id:'nepo-baby', uid: uid()});
+  for(let i=0;i<n-1;i++) bombs.push({id:'white-envelope', uid: uid()});
+  for(let i=0;i<nepoCnt;i++) bombs.push({id:'nepo-baby', uid: uid()});
   const finalDeck = shuffle([...deck, ...bombs]);
-
+  // Validate deck
+  validateDeck(finalDeck, n);
   const playersState = {};
-  shuffledIds.forEach((pid, i) => {
+  playerIds.forEach((pid,i) => {
     playersState[pid] = {
-      name: playersObj[pid].name,
-      hand: hands[pid],
+      name: playersObj[pid].name, hand: hands[pid],
       eliminated: false,
-      protected: false,
+      protected: false,   // sick-leave protection active
       order: i,
     };
   });
-
   const gs = {
-    players: playersState,
-    turnOrder: shuffledIds,
-    currentTurnIndex: 0,
-    direction: 1, // 1 = forward, -1 = reverse
-    deck: finalDeck,
-    discard: [],
+    players: playersState, turnOrder: playerIds,
+    currentTurnIndex: 0, direction: 1,
+    deck: finalDeck, discard: [],
     attackDebt: 0,
+    attackChainCount: 0,       // BUG-054: track chain depth (max 3)
     status: 'playing',
     lastAction: 'เกมเริ่มแล้ว! 🎉',
     turnStartTime: Date.now(),
-    comboRightsUsed: false, // ร้องเรียนผู้บริหาร
+    comboRightsUsed: false,
     pendingAction: null,
     version: 1,
   };
-
-  await update(ref(db, `rooms/${roomCode}`), {
-    status: 'playing',
-    gameState: gs,
-  });
+  await update(ref(db, `rooms/${roomCode}`), { status:'playing', gameState: gs });
 }
 
-// ─── Listen Game State ─────────────────────────────────────────────────────
 function startGame() {
-  // Remove lobby listeners
-  unsubscribers.forEach(fn => fn());
-  unsubscribers = [];
-
+  unsubscribers.forEach(fn=>fn()); unsubscribers = [];
   showScreen('gameScreen');
   listenGameState();
 }
@@ -1276,161 +1278,147 @@ function listenGameState() {
   const unsub = onValue(r, snap => {
     if (!snap.exists()) return;
     const newState = snap.val();
-    const prevState = gameState;
+    // BUG-049: reject stale state — only accept newer versions
+    if (gameState && newState.version && gameState.version &&
+        newState.version < gameState.version) {
+      console.warn('Rejected stale state v'+newState.version+' (current: '+gameState.version+')');
+      return;
+    }
+    const prev = gameState;
     gameState = newState;
-    renderGame(prevState);
-    checkPendingActions(prevState);
+    renderGame();
+    checkPendingActions(prev);
   });
-  unsubscribers.push(() => off(r));
+  unsubscribers.push(()=>off(r));
 }
 
-// ─── Render Game ───────────────────────────────────────────────────────────
-function renderGame(prevState) {
-  if (!gameState) return;
-  const gs = gameState;
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid]?.eliminated);
-  if (activePlayers.length === 0) return;
-
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderGame() {
+  const gs = gameState; if (!gs) return;
+  const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid]?.eliminated);
+  if (gs.status==='finished') {
+    // BUG-057: lock all action buttons immediately
+    document.getElementById('btnPlayCard').disabled = true;
+    document.getElementById('btnDraw').disabled = true;
+    document.getElementById('btnCombo').style.display = 'none';
+    handleWin(activePlayers);
+    return;
+  }
   const currentPid = gs.turnOrder[gs.currentTurnIndex];
   const isMyTurn = currentPid === myId;
 
-  // Header
-  const currentPlayerName = gs.players[currentPid]?.name || '?';
+  // Turn name
   const tnEl = document.getElementById('currentTurnName');
-  tnEl.textContent = isMyTurn ? '🌟 เทิร์นของคุณ!' : `เทิร์น: ${currentPlayerName}`;
-  tnEl.className = `turn-name ${isMyTurn ? 'my-turn pulse' : ''}`;
+  tnEl.textContent = isMyTurn ? '🌟 เทิร์นของคุณ!' : `เทิร์น: ${gs.players[currentPid]?.name||'?'}`;
+  tnEl.className = `turn-name ${isMyTurn?'my-turn pulse':''}`;
 
-  // Attack indicator
+  // Attack debt
   const attEl = document.getElementById('attackIndicator');
-  const attNum = document.getElementById('attackDebtNum');
-  if (gs.attackDebt > 0) {
-    attEl.style.display = 'block';
-    attNum.textContent = gs.attackDebt;
-    document.getElementById('attackDebtLabel').textContent = `ต้องจั่ว ${gs.attackDebt} ใบ`;
-  } else {
-    attEl.style.display = 'none';
-    document.getElementById('attackDebtLabel').textContent = '';
-  }
+  document.getElementById('attackDebtNum').textContent = gs.attackDebt;
+  attEl.style.display = gs.attackDebt>0 ? 'block' : 'none';
+  // BUG-054: show chain count in header
+  const chainCount = gs.attackChainCount || 0;
+  const chainLabel = chainCount>0 ? ` Chain ${chainCount}/3` : '';
+  document.getElementById('attackDebtLabel').textContent = gs.attackDebt>0 ? `ต้องจั่ว ${gs.attackDebt} ใบ${chainLabel}` : '';
 
   // Direction
-  document.getElementById('directionIndicator').textContent = gs.direction === 1 ? '→ ปกติ' : '← Reverse';
+  document.getElementById('directionIndicator').textContent = gs.direction===1 ? '→ ปกติ' : '← Reverse';
 
-  // Deck / discard
+  // Deck/discard counts
   document.getElementById('deckCount').textContent = `${gs.deck.length} ใบ`;
   document.getElementById('discardCount').textContent = `${gs.discard.length} ใบ`;
 
-  const discardTop = gs.discard.length > 0 ? gs.discard[gs.discard.length - 1] : null;
+  // Discard top
+  const discardTop = gs.discard.length>0 ? gs.discard[gs.discard.length-1] : null;
   const discardCardEl = document.getElementById('discardTopCard');
   if (discardTop) {
-    const c = CARDS[discardTop.id];
     discardCardEl.className = 'pile-card';
-    discardCardEl.innerHTML = `<img src="${cardImg(discardTop.id)}" alt="${c?.name}" onerror="this.outerHTML='<span style=font-size:2rem>${c?.emoji||'?'}</span>'">`;
+    discardCardEl.innerHTML = cardThumb(discardTop.id, 80);
   } else {
     discardCardEl.className = 'pile-card empty';
     discardCardEl.innerHTML = '';
   }
 
-  // Action log
-  document.getElementById('actionLog').innerHTML = gs.lastAction || '';
-
-  // Players strip
+  document.getElementById('actionLog').innerHTML = gs.lastAction||'';
   renderPlayersStrip(gs, currentPid);
-
-  // My hand
-  renderMyHand(gs);
-
-  // Timer
+  renderMyHand(gs, isMyTurn);
   startTimer(gs, isMyTurn);
-
-  // Action buttons
   updateActionButtons(gs, isMyTurn);
+  // BUG-014: update discard viewer realtime if open
+  renderDiscardGrid();
+  // BUG-028: spectator mode — show watching indicator when eliminated
+  renderSpectatorMode(gs);
+}
 
-  // Win check
-  if (gs.status === 'finished') {
-    clearInterval(timerInterval);
-    const winnerId = activePlayers[0];
-    const winnerName = gs.players[winnerId]?.name || 'ไม่ทราบ';
-    document.getElementById('winnerName').textContent = winnerId === myId ? '🏆 คุณชนะ!' : `🏆 ${winnerName} ชนะ!`;
-    document.getElementById('winnerOverlay').classList.add('show');
+function renderSpectatorMode(gs) {
+  const me = gs.players[myId];
+  const spectatorBar = document.getElementById('spectatorBar');
+  if (!spectatorBar) return;
+  if (me?.eliminated) {
+    spectatorBar.style.display = 'flex';
+    const remaining = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated).length;
+    spectatorBar.innerHTML = `<span>👁️ โหมดดูเกม</span><span style="color:var(--text2);font-size:0.8rem">เหลือ ${remaining} คน</span>`;
+  } else {
+    spectatorBar.style.display = 'none';
   }
 }
 
 function renderPlayersStrip(gs, currentPid) {
   const strip = document.getElementById('playersStrip');
   strip.innerHTML = '';
-  const avatars = ['👩‍💼','👨‍💼','🧑‍💻','👩‍🔬','🧑‍🎨','👩‍🍳','🧙','🦸'];
-
-  gs.turnOrder.forEach((pid, i) => {
-    const p = gs.players[pid];
-    if (!p) return;
+  const avatars = ['👩‍💼','👨‍💼','🧑‍💻','👩‍🔬','🧑‍🎨','👷','🧙','🦸'];
+  gs.turnOrder.forEach((pid,i) => {
+    const p = gs.players[pid]; if (!p) return;
     const chip = document.createElement('div');
     chip.className = `player-chip ${pid===currentPid?'current-turn':''} ${p.eliminated?'eliminated':''} ${pid===myId?'me':''}`;
     chip.innerHTML = `
-      <div class="player-chip-avatar">${avatars[i % avatars.length]}</div>
+      <div class="player-chip-avatar">${avatars[i%avatars.length]}</div>
       <div class="player-chip-name">${p.name}</div>
       <div class="player-chip-count">${(p.hand||[]).length} ใบ</div>
-      ${p.protected ? `<div class="player-chip-protected">🏥</div>` : ''}
-    `;
+      ${p.protected?'<div class="player-chip-protected">🏥</div>':''}
+      ${p.eliminated?'<div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:rgba(0,0,0,0.5);border-radius:12px;">📄</div>':''}`;
     strip.appendChild(chip);
   });
 }
 
-function renderMyHand(gs) {
-  const me = gs.players[myId];
-  if (!me) return;
-  const hand = me.hand || [];
+function renderMyHand(gs, isMyTurn) {
+  const me = gs.players[myId]; if (!me) return;
+  const hand = me.hand||[];
   const handEl = document.getElementById('myHandCards');
-  const isMyTurn = gs.turnOrder[gs.currentTurnIndex] === myId;
-  const isEliminated = me.eliminated;
-
   document.getElementById('myHandCount').textContent = hand.length;
   handEl.innerHTML = '';
-  selectedCards = selectedCards.filter(uid => hand.some(c => c.uid === uid));
+  // Clean up invalid selections
+  selectedCards = selectedCards.filter(uid=>hand.some(c=>c.uid===uid));
 
-  hand.forEach((card, idx) => {
-    const div = document.createElement('div');
+  hand.forEach(card => {
     const isSelected = selectedCards.includes(card.uid);
-    const isCombo = comboMode && isSelected;
-    const disabled = isEliminated || (!isMyTurn && !comboMode);
-    div.className = `hand-card ${isSelected?(comboMode?'combo-selected':'selected'):''} ${disabled?'disabled':''}`;
-    div.innerHTML = buildCardHTML(card.id);
-
-    // Fallback
-    const c = CARDS[card.id];
-    if (c) {
-      div.dataset.cardUid = card.uid;
-      div.dataset.cardId = card.id;
-    }
-
-    if (!disabled) {
-      div.addEventListener('click', () => onCardClick(card, isMyTurn));
-    }
-
-    // Long press for detail
+    const isComboCard = COMBO_RESOURCES.includes(card.id);
+    const disabled = me.eliminated || (!isMyTurn);
+    const div = document.createElement('div');
+    div.className = `hand-card ${isSelected?(isComboCard?'combo-selected':'selected'):''} ${disabled?'disabled':''}`;
+    div.innerHTML = cardThumb(card.id);
+    if (!disabled) div.addEventListener('click', ()=>onCardClick(card, isMyTurn));
+    // Long press → detail
     let pressTimer;
-    div.addEventListener('touchstart', () => {
-      pressTimer = setTimeout(() => showCardDetail(card), 500);
-    });
-    div.addEventListener('touchend', () => clearTimeout(pressTimer));
-
+    div.addEventListener('touchstart', ()=>{ pressTimer=setTimeout(()=>showCardDetail(card),500); },{passive:true});
+    div.addEventListener('touchend', ()=>clearTimeout(pressTimer));
+    div.addEventListener('mousedown', ()=>{ pressTimer=setTimeout(()=>showCardDetail(card),600); });
+    div.addEventListener('mouseup', ()=>clearTimeout(pressTimer));
     handEl.appendChild(div);
   });
 }
 
 function showCardDetail(card) {
-  const c = CARDS[card.id];
-  if (!c) return;
+  const c = CARDS[card.id]; if (!c) return;
   const preview = document.getElementById('cardDetailPreview');
-  preview.innerHTML = `<img src="${cardImg(card.id)}" alt="${c.name}" onerror="this.parentElement.classList.add('no-image');this.outerHTML='<span class=emoji>${c.emoji}</span>'">`;
+  preview.innerHTML = cardThumb(card.id, 140);
+  preview.className = 'card-preview-big';
   document.getElementById('cardDetailName').textContent = `${c.emoji} ${c.name}`;
   document.getElementById('cardDetailEffect').innerHTML = c.effect;
-
   const playBtn = document.getElementById('btnCardDetailPlay');
-  const gs = gameState;
-  const isMyTurn = gs?.turnOrder[gs?.currentTurnIndex] === myId;
-  playBtn.style.display = isMyTurn ? 'block' : 'none';
-  playBtn.onclick = () => { closeModal('cardDetailModal'); onCardClick(card, isMyTurn); };
-
+  const isMyTurn = gameState?.turnOrder[gameState?.currentTurnIndex]===myId;
+  playBtn.style.display = isMyTurn?'block':'none';
+  playBtn.onclick = ()=>{ closeModal('cardDetailModal'); onCardClick(card, isMyTurn); };
   openModal('cardDetailModal');
 }
 
@@ -1439,187 +1427,212 @@ function updateActionButtons(gs, isMyTurn) {
   const btnDraw = document.getElementById('btnDraw');
   const btnCombo = document.getElementById('btnCombo');
   const isElim = gs.players[myId]?.eliminated;
+  // BUG-023: COUNTER_WINDOW doesn't block the turn owner's draw button
+  // Only block draw if pendingAction requires MY response (target=me) or is FAVOR_REQUEST to me
+  const pa = gs.pendingAction;
+  const blocksMe = pa && (
+    pa.type === 'FAVOR_REQUEST' && pa.to === myId
+  );
+  const blocksTurn = pa && pa.type !== 'COUNTER_WINDOW';
 
-  if (!isMyTurn || isElim) {
+  if (isElim) {
+    // BUG-028: eliminated = spectator mode, disable all actions but keep UI visible
     btnPlay.disabled = true;
     btnDraw.disabled = true;
     btnCombo.style.display = 'none';
+    document.getElementById('btnDraw').textContent = '👁️ ดูเกม';
     return;
   }
-
+  // Reset draw button text
+  document.getElementById('btnDraw').textContent = 'จั่วไพ่ →';
+  if (!isMyTurn || blocksMe) {
+    btnPlay.disabled = true;
+    btnDraw.disabled = !isMyTurn || blocksMe;
+    btnCombo.style.display = 'none';
+    return;
+  }
+  if (blocksTurn) {
+    btnPlay.disabled = true;
+    btnCombo.style.display = 'none';
+    btnDraw.disabled = false; // turn owner can still draw
+    return;
+  }
   btnDraw.disabled = false;
-
-  const comboCount = selectedCards.filter(uid => {
-    const me = gs.players[myId];
-    const card = (me?.hand||[]).find(c => c.uid === uid);
-    return card && COMBO_RESOURCES.includes(card.id);
+  const hand = gs.players[myId]?.hand||[];
+  const comboCount = selectedCards.filter(uid=>{
+    const c = hand.find(c=>c.uid===uid);
+    return c && COMBO_RESOURCES.includes(c.id);
   }).length;
-
-  if (comboCount >= 2) {
+  if (comboCount>=2) {
     btnCombo.style.display = 'block';
     btnCombo.textContent = `✨ Combo ${comboCount}!`;
   } else {
     btnCombo.style.display = 'none';
   }
-
-  const hasSelected = selectedCards.length > 0;
-  const nonComboSelected = selectedCards.some(uid => {
-    const me = gs.players[myId];
-    const card = (me?.hand||[]).find(c => c.uid === uid);
-    return card && !COMBO_RESOURCES.includes(card.id);
+  const nonComboSelected = selectedCards.some(uid=>{
+    const c = hand.find(c=>c.uid===uid);
+    return c && !COMBO_RESOURCES.includes(c.id);
   });
-  btnPlay.disabled = !hasSelected || !nonComboSelected;
+  btnPlay.disabled = !nonComboSelected;
 }
 
-// ─── Card Click Handler ────────────────────────────────────────────────────
+// ─── Card Click ───────────────────────────────────────────────────────────────
 function onCardClick(card, isMyTurn) {
-  if (!isMyTurn && !comboMode) { showCardDetail(card); return; }
-  const c = CARDS[card.id];
-  if (!c) return;
-
-  // Combo resource — toggle selection
-  if (COMBO_RESOURCES.includes(card.id)) {
-    toggleCardSelect(card.uid);
-    return;
-  }
-
-  // Non-combo card
-  if (selectedCards.includes(card.uid)) {
-    selectedCards = selectedCards.filter(u => u !== card.uid);
+  if (!isMyTurn) { showCardDetail(card); return; }
+  const isCombo = COMBO_RESOURCES.includes(card.id);
+  if (isCombo) {
+    toggleSelect(card.uid);
   } else {
     // Deselect other non-combo cards
     const me = gameState.players[myId];
-    selectedCards = selectedCards.filter(uid => {
-      const c2 = (me?.hand||[]).find(c => c.uid === uid);
-      return c2 && COMBO_RESOURCES.includes(c2.id);
-    });
-    selectedCards.push(card.uid);
+    selectedCards = selectedCards.filter(uid=>{ const c=(me?.hand||[]).find(c=>c.uid===uid); return c&&COMBO_RESOURCES.includes(c.id); });
+    if (selectedCards.includes(card.uid)) selectedCards = selectedCards.filter(u=>u!==card.uid);
+    else selectedCards.push(card.uid);
   }
-  renderMyHand(gameState);
-  updateActionButtons(gameState, isMyTurn);
+  renderMyHand(gameState, true);
+  updateActionButtons(gameState, true);
 }
 
-function toggleCardSelect(cardUid) {
-  if (selectedCards.includes(cardUid)) {
-    selectedCards = selectedCards.filter(u => u !== cardUid);
-  } else {
-    selectedCards.push(cardUid);
-  }
-  renderMyHand(gameState);
-  const gs = gameState;
-  updateActionButtons(gs, gs.turnOrder[gs.currentTurnIndex] === myId);
+function toggleSelect(cardUid) {
+  if (selectedCards.includes(cardUid)) selectedCards = selectedCards.filter(u=>u!==cardUid);
+  else selectedCards.push(cardUid);
 }
 
-// ─── Timer ─────────────────────────────────────────────────────────────────
+// ─── Timer ────────────────────────────────────────────────────────────────────
 function startTimer(gs, isMyTurn) {
   clearInterval(timerInterval);
-  const elapsed = Date.now() - (gs.turnStartTime || Date.now());
-  let remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
-
   const circle = document.getElementById('timerCircle');
-  const update = () => {
-    remaining = Math.max(0, 30 - Math.floor((Date.now() - gs.turnStartTime) / 1000));
+  const tick = ()=>{
+    const remaining = Math.max(0, 30 - Math.floor((Date.now()-(gs.turnStartTime||Date.now()))/1000));
     circle.textContent = remaining;
-    circle.style.setProperty('--pct', remaining / 30);
-    if (remaining === 0 && isMyTurn) {
-      clearInterval(timerInterval);
-      autoDrawCard();
+    circle.style.setProperty('--pct', remaining/30);
+    if (remaining===0 && isMyTurn && !isDrawing && !pendingDefuse) {
+      clearInterval(timerInterval); autoDrawCard();
     }
   };
-  update();
-  timerInterval = setInterval(update, 500);
+  tick(); timerInterval = setInterval(tick, 500);
 }
 
 async function autoDrawCard() {
-  if (!gameState) return;
-  const gs = gameState;
-  if (gs.turnOrder[gs.currentTurnIndex] !== myId) return;
-  toast('⏰ หมดเวลา! จั่วอัตโนมัติ', 'warning');
+  if (!gameState || gameState.turnOrder[gameState.currentTurnIndex]!==myId) return;
+  toast('⏰ หมดเวลา! จั่วอัตโนมัติ','warning');
   await drawCard();
 }
 
-// ─── Draw Card ─────────────────────────────────────────────────────────────
+// ─── Draw Card (BUG-001 fixed: isDrawing guard, BUG-002 fixed: attackDebt loop) ──
 async function drawCard() {
+  if (isDrawing) return;                    // BUG-001 guard
+  if (pendingDefuse) return;               // BUG-016: block draw while defuse modal open
   if (!gameState) return;
-  const gs = JSON.parse(JSON.stringify(gameState));
-  if (gs.turnOrder[gs.currentTurnIndex] !== myId) return;
+  const gs = gameState;
+  if (gs.turnOrder[gs.currentTurnIndex]!==myId) return;
   if (gs.players[myId]?.eliminated) return;
+  if (gs.pendingAction) return;
 
-  const deck = gs.deck;
-  if (deck.length === 0) { toast('ไพ่หมดแล้ว!', 'error'); return; }
+  isDrawing = true;
+  try {
+    await _drawOnce();
+  } finally {
+    isDrawing = false;
+  }
+}
 
-  const drawn = deck.pop();
+async function _drawOnce() {
+  const gs = JSON.parse(JSON.stringify(gameState));
+  // BUG-029: reshuffle discard → deck when deck empty
+  if (gs.deck.length===0) {
+    const reshufflable = gs.discard.filter(c=>c.id!=='white-envelope' && c.id!=='nepo-baby');
+    if (reshufflable.length > 0) {
+      // Shuffle discard back into deck (keep bombs out)
+      gs.deck = shuffle(reshufflable);
+      gs.discard = gs.discard.filter(c=>c.id==='white-envelope'||c.id==='nepo-baby');
+      toast('🔀 สับไพ่กองทิ้งกลับเป็นกองจั่ว!','info', 3000);
+      gs.lastAction = `🔀 สับไพ่กองทิ้งใหม่ (${gs.deck.length} ใบ)`;
+      await saveGameState(gs);
+      // BUG-029: retry draw after reshuffle — reset guard first
+      isDrawing = false; // reset so drawCard() can proceed
+      await drawCard();
+      return;
+    } else {
+      // Truly no cards left at all — advance turn
+      toast('ไพ่หมดทั้งกอง! จบเทิร์น','warning');
+      gs.attackDebt = 0;
+      gs.lastAction = `ไพ่หมดทั้งกอง — จบเทิร์น`;
+      await advanceTurn(gs);
+      return;
+    }
+  }
+
+  const drawn = gs.deck.pop();
   selectedCards = [];
 
-  if (drawn.id === 'white-envelope') {
-    // Check defuse options
-    const hand = gs.players[myId].hand || [];
-    const hasDefuse = hand.some(c => c.id === 'labor-lawsuit');
-    const hasNepo = hand.some(c => c.id === 'nepo-baby');
-    const hasCombo5Rights = !gs.comboRightsUsed && hasCombo5Available(hand);
-
-    gs.deck = deck;
+  if (drawn.id==='white-envelope') {
+    const hand = gs.players[myId].hand||[];
+    const hasDefuse = hand.some(c=>c.id==='labor-lawsuit');
+    const hasNepo = hand.some(c=>c.id==='nepo-baby');
+    const hasCombo5 = !gs.comboRightsUsed && canCombo5Special(hand);
+    // BUG-025: clear nepo tracking pendingAction when target actually draws the bomb
+    if (gs.pendingAction?.type==='WHITE_ENVELOPE_IN_DECK_FOR' && gs.pendingAction.targetId===myId) {
+      gs.pendingAction = null;
+    }
     pendingDefuse = { gs, drawn };
-    showDefuseModal(hasDefuse, hasNepo, hasCombo5Rights, hand);
-    // Don't advance turn yet
+    showDefuseModal(hasDefuse, hasNepo, hasCombo5);
   } else {
-    gs.players[myId].hand = [...(gs.players[myId].hand || []), drawn];
-    gs.deck = deck;
+    gs.players[myId].hand = [...(gs.players[myId].hand||[]), drawn];
     gs.lastAction = `<span class="highlight">${myName}</span> จั่วการ์ด`;
+    // BUG-002 + BUG-031 + BUG-054: attackDebt handling — reduce debt, reset chain when done
+    if (gs.attackDebt>0) {
+      gs.attackDebt = Math.max(0, gs.attackDebt - 1);
+      if (gs.attackDebt>0) {
+        gs.turnStartTime = Date.now();
+        await saveGameState(gs);
+        toast(`ยังต้องจั่วอีก ${gs.attackDebt} ใบ!`,'warning');
+        return;
+      }
+      // Debt fully resolved — reset chain state
+      gs.attackChainCount = 0;
+    }
     await advanceTurn(gs);
   }
 }
 
-function hasCombo5Available(hand) {
-  // Need 5 combo resources of same type
-  const counts = {};
-  hand.forEach(c => { if(COMBO_RESOURCES.includes(c.id)) counts[c.id] = (counts[c.id]||0)+1; });
-  return Object.values(counts).some(v => v >= 5);
+function canCombo5Special(hand) {
+  // Need 5 combo resources total (any mix)
+  return hand.filter(c=>COMBO_RESOURCES.includes(c.id)).length >= 5;
 }
 
-function showDefuseModal(hasDefuse, hasNepo, hasCombo5, hand) {
-  const msg = document.getElementById('defuseMessage');
-  msg.textContent = 'คุณจั่วได้ซองขาว! ต้องการการ์ดป้องกัน';
-
+// ─── Defuse ───────────────────────────────────────────────────────────────────
+function showDefuseModal(hasDefuse, hasNepo, hasCombo5) {
   const opts = document.getElementById('defuseOptions');
   opts.innerHTML = '';
+  document.getElementById('defuseMessage').textContent = 'คุณจั่วได้ซองขาว! ต้องใช้การ์ดป้องกัน';
 
   if (hasDefuse) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-success';
-    btn.style.maxWidth = 'none';
-    btn.innerHTML = '⚖️ ใช้ฟ้องกรมแรงงาน';
-    btn.onclick = () => useDefuse('labor-lawsuit');
+    const btn = makeBtn('⚖️ ใช้ฟ้องกรมแรงงาน','btn-success',()=>useDefuse('labor-lawsuit'));
     opts.appendChild(btn);
   }
-
-  if (hasCombo5 && !gameState.comboRightsUsed) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-accent';
-    btn.style.maxWidth = 'none';
-    btn.innerHTML = '🎖️ ร้องเรียนผู้บริหาร (Combo 5 Special)';
-    btn.onclick = () => useDefuse('combo5-special');
+  if (hasCombo5) {
+    // BUG-015: re-check comboRightsUsed from latest gameState at click time (not stale snapshot)
+    const btn = makeBtn('🎖️ ร้องเรียนผู้บริหาร (Combo 5 Special — ใช้ได้ 1 ครั้ง/เกม)','btn-accent',()=>{
+      if (gameState?.comboRightsUsed) { toast('ใช้ร้องเรียนผู้บริหารไปแล้ว!','error'); return; }
+      useDefuse('combo5-special');
+    });
     opts.appendChild(btn);
   }
-
   if (hasNepo) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-accent';
-    btn.style.maxWidth = 'none';
-    btn.innerHTML = '👶 ใช้เด็กเส้น (ส่งซองขาวคนอื่น)';
-    btn.onclick = () => useNepo();
+    const btn = makeBtn('👶 ใช้เด็กเส้น (ส่งซองขาวให้คนอื่น)','btn-accent',()=>startNepoFlow());
     opts.appendChild(btn);
   }
-
   const giveUpBtn = document.getElementById('btnDefuseGiveUp');
-  if (!hasDefuse && !hasNepo && (!hasCombo5 || gameState.comboRightsUsed)) {
-    giveUpBtn.style.display = 'block';
-    giveUpBtn.onclick = () => eliminateMe();
-  } else {
-    giveUpBtn.style.display = 'none';
-  }
-
+  giveUpBtn.style.display = (!hasDefuse && !hasNepo && !hasCombo5) ? 'block' : 'none';
+  giveUpBtn.onclick = ()=>eliminateMe();
   openModal('defuseModal');
+}
+
+function makeBtn(text, cls, fn) {
+  const b = document.createElement('button');
+  b.className = `btn ${cls}`; b.style.maxWidth='none'; b.textContent = text;
+  b.onclick = fn; return b;
 }
 
 async function useDefuse(type) {
@@ -1627,775 +1640,1029 @@ async function useDefuse(type) {
   if (!pendingDefuse) return;
   const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
 
-  if (type === 'labor-lawsuit') {
-    // Remove defuse from hand
+  if (type==='labor-lawsuit') {
     const hand = gs.players[myId].hand;
-    const idx = hand.findIndex(c => c.id === 'labor-lawsuit');
-    if (idx >= 0) {
-      const used = hand.splice(idx, 1)[0];
-      gs.discard.push(used);
-    }
+    const idx = hand.findIndex(c=>c.id==='labor-lawsuit');
+    if (idx>=0) gs.discard.push(hand.splice(idx,1)[0]);
     gs.lastAction = `<span class="highlight">${myName}</span> ใช้ ⚖️ ฟ้องกรมแรงงาน!`;
-  } else if (type === 'combo5-special') {
-    // Use combo 5 resources
+  } else if (type==='combo5-special') {
     const hand = gs.players[myId].hand;
-    let removed = 0;
-    for (let i = hand.length - 1; i >= 0 && removed < 5; i--) {
-      if (COMBO_RESOURCES.includes(hand[i].id)) {
-        gs.discard.push(hand.splice(i, 1)[0]);
-        removed++;
-      }
+    let removed=0;
+    for (let i=hand.length-1;i>=0&&removed<5;i--) {
+      if (COMBO_RESOURCES.includes(hand[i].id)) { gs.discard.push(hand.splice(i,1)[0]); removed++; }
     }
     gs.comboRightsUsed = true;
     gs.lastAction = `<span class="highlight">${myName}</span> ใช้ 🎖️ ร้องเรียนผู้บริหาร!`;
   }
-
-  // Show insert position
   pendingDefuse = { ...pendingDefuse, gs };
   showInsertModal(gs.deck.length);
 }
 
 function showInsertModal(deckSize) {
   const container = document.getElementById('insertPositions');
-  container.innerHTML = `<div class="insert-label">วางซองขาวที่ตำแหน่งไหน? (1 = บนสุด, ${deckSize+1} = ล่างสุด)</div><div class="insert-positions" id="insertPosButtons"></div>`;
+  container.innerHTML = `<div class="insert-label">วางซองขาวที่ตำแหน่งไหน?</div><div class="insert-positions" id="insertPosButtons"></div>`;
   const btns = document.getElementById('insertPosButtons');
-
-  // Show max 10 positions + top/bottom
-  btns.innerHTML = '';
-  const pos = ['บนสุด'];
-  const total = deckSize + 1;
-  if (total > 2) {
-    const step = Math.max(1, Math.floor(total / 8));
-    for (let i = step; i < total - step; i += step) {
-      pos.push(`ตำแหน่ง ${i}`);
-      if (pos.length >= 7) break;
+  const total = deckSize+1;
+  const positions = [];
+  positions.push({ label:'บนสุด (ใบถัดไป)', idx: deckSize });
+  if (total>2) {
+    const steps = Math.min(6, total-2);
+    for(let i=1;i<=steps;i++) {
+      const idx = Math.round((deckSize/steps)*i);
+      if (idx>0 && idx<deckSize) positions.push({ label:`ตำแหน่งที่ ${idx}`, idx });
     }
   }
-  pos.push('ล่างสุด (สุ่ม)');
-
-  pos.forEach((label, i) => {
+  positions.push({ label:'ล่างสุด (สุ่ม)', idx: Math.floor(Math.random()*(deckSize+1)) });
+  positions.forEach(p=>{
     const btn = document.createElement('button');
-    btn.className = 'insert-pos-btn';
-    btn.textContent = label;
-    btn.onclick = () => {
-      closeModal('insertModal');
-      let insertIdx;
-      if (i === 0) insertIdx = deckSize; // top = last in array (drawn from end)
-      else if (i === pos.length - 1) insertIdx = Math.floor(Math.random() * (deckSize + 1));
-      else {
-        const step = Math.max(1, Math.floor((deckSize + 1) / 8));
-        insertIdx = step * i;
-      }
-      insertDefuseAndContinue(insertIdx);
-    };
+    btn.className='insert-pos-btn'; btn.textContent=p.label;
+    btn.onclick=()=>{ closeModal('insertModal'); insertDefuse(p.idx); };
     btns.appendChild(btn);
   });
-
   openModal('insertModal');
 }
 
-async function insertDefuseAndContinue(insertIdx) {
+async function insertDefuse(insertIdx) {
   if (!pendingDefuse) return;
   const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
-  const bomb = pendingDefuse.drawn;
-  gs.deck.splice(insertIdx, 0, bomb);
+  gs.deck.splice(insertIdx, 0, pendingDefuse.drawn);
   pendingDefuse = null;
 
-  // Reduce attack debt if present (defuse uses 1 draw)
-  if (gs.attackDebt > 0) {
-    gs.attackDebt--;
-    if (gs.attackDebt > 0) {
-      // Still has more draws to do — put back state and continue
+  // BUG-002: defuse counts as 1 draw, reduce debt
+  if (gs.attackDebt>0) {
+    gs.attackDebt = Math.max(0, gs.attackDebt - 1); // BUG-031
+    if (gs.attackDebt>0) {
+      gs.turnStartTime = Date.now();
       await saveGameState(gs);
-      toast(`ยังต้องจั่วอีก ${gs.attackDebt} ใบ!`, 'warning');
+      toast(`ยังต้องจั่วอีก ${gs.attackDebt} ใบ!`,'warning');
       return;
     }
+    gs.attackChainCount = 0; // BUG-054: reset chain when debt resolved via defuse
   }
-
   await advanceTurn(gs);
 }
 
-async function useNepo() {
+// ─── Nepo Baby Flow ───────────────────────────────────────────────────────────
+function startNepoFlow() {
   closeModal('defuseModal');
   if (!pendingDefuse) return;
-  const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
-
-  // Show target selection
+  const gs = pendingDefuse.gs;
+  // BUG-005 fix: filter out protected players AND eliminated
+  const validTargets = gs.turnOrder.filter(pid=>
+    !gs.players[pid].eliminated && pid!==myId && !gs.players[pid].protected
+  );
+  if (validTargets.length===0) {
+    toast('ไม่มีเป้าหมายที่ใช้เด็กเส้นได้ (ทุกคนลาป่วยอยู่)','error');
+    openModal('defuseModal'); return;
+  }
   const list = document.getElementById('nepoTargetList');
   list.innerHTML = '';
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId);
-
-  activePlayers.forEach(pid => {
+  validTargets.forEach(pid=>{
     const p = gs.players[pid];
     const item = document.createElement('div');
-    item.className = 'target-item';
-    item.innerHTML = `<div class="target-avatar">👤</div><div class="target-name">${p.name}</div>`;
-    item.onclick = () => {
-      closeModal('nepoModal');
-      executeNepo(pid, gs);
-    };
+    item.className='target-item';
+    item.innerHTML=`<div class="target-avatar">👤</div><div class="target-name">${p.name}</div><div class="target-count">${(p.hand||[]).length} ใบ</div>`;
+    item.onclick=()=>{ closeModal('nepoModal'); executeNepo(pid); };
     list.appendChild(item);
   });
-
-  document.getElementById('btnNepoCancel').onclick = () => {
-    closeModal('nepoModal');
-    // Reopen defuse modal
-    openModal('defuseModal');
-  };
+  document.getElementById('btnNepoCancel').onclick=()=>{ closeModal('nepoModal'); openModal('defuseModal'); };
   openModal('nepoModal');
 }
 
-async function executeNepo(targetId, gs) {
+async function executeNepo(targetId) {
   if (!pendingDefuse) return;
+  const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
   const bomb = pendingDefuse.drawn;
-
-  // Find nepo baby in hand and remove it (goes to removed from game — don't add to discard)
+  // Remove nepo from hand (Remove From Game — not discard)
   const hand = gs.players[myId].hand;
-  const nepoIdx = hand.findIndex(c => c.id === 'nepo-baby');
-  if (nepoIdx >= 0) hand.splice(nepoIdx, 1);
-  // nepo baby removed from game — not added to discard
-
-  // Send white envelope to target's hand
-  gs.players[targetId].hand.push(bomb);
-  gs.lastAction = `<span class="highlight">${myName}</span> ใช้ 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name}`;
-
+  const idx = hand.findIndex(c=>c.id==='nepo-baby'); if (idx>=0) hand.splice(idx,1);
+  // BUG-025 fix: insert bomb near top of deck (target will draw it next turn)
+  // Then set pendingAction so target must respond when they draw it
+  const insertPos = Math.max(0, gs.deck.length - 1); // 2nd from top
+  gs.deck.splice(insertPos, 0, bomb);
+  gs.pendingAction = {
+    type: 'WHITE_ENVELOPE_IN_DECK_FOR',
+    targetId,
+    targetName: gs.players[targetId].name,
+  };
+  gs.lastAction = `<span class="highlight">${myName}</span> 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name} (จะจั่วได้ในเทิร์นหน้า!)`;
   pendingDefuse = null;
-
-  // Flash effect
-  const flash = document.createElement('div');
-  flash.className = 'nepo-flash';
-  document.body.appendChild(flash);
-  setTimeout(() => flash.remove(), 600);
-
+  // Flash
+  const flash = document.createElement('div'); flash.className='nepo-flash'; document.body.appendChild(flash);
+  setTimeout(()=>flash.remove(),600);
   await advanceTurn(gs);
 }
 
+// ─── Eliminate ────────────────────────────────────────────────────────────────
 async function eliminateMe() {
   closeModal('defuseModal');
   if (!pendingDefuse) return;
   const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+  const drawnBomb = pendingDefuse.drawn; // BUG-040: track drawn white-envelope
   pendingDefuse = null;
-
-  // Move hand to discard (except nepo babies)
-  const hand = gs.players[myId].hand || [];
-  const toDiscard = hand.filter(c => c.id !== 'nepo-baby');
-  gs.discard = [...gs.discard, ...toDiscard];
-  gs.players[myId].hand = [];
-  gs.players[myId].eliminated = true;
+  const hand = gs.players[myId].hand||[];
+  gs.discard.push(...hand.filter(c=>c.id!=='nepo-baby'));
+  gs.players[myId].hand = []; gs.players[myId].eliminated = true;
+  // BUG-040: white-envelope that caused death is Removed From Game
+  // (already popped from deck in _drawOnce — just ensure it's not double-counted)
+  // Track removed cards count for debugging
+  gs.removedCards = (gs.removedCards||0) + 1 + hand.filter(c=>c.id==='nepo-baby').length;
   gs.lastAction = `<span style="color:var(--danger)">${myName} ตกรอบ! 📄</span>`;
-
   document.getElementById('eliminatedOverlay').classList.add('show');
-
-  // Check win condition
-  const remaining = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
-  if (remaining.length === 1) {
-    gs.status = 'finished';
-    await saveGameState(gs);
-    return;
+  // BUG-021: clear pendingAction if target was me (eliminated mid-pending)
+  if (gs.pendingAction && (gs.pendingAction.to===myId || gs.pendingAction.targetId===myId)) {
+    gs.pendingAction = null;
   }
-
-  // Advance turn, skipping eliminated
+  const remaining = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated);
+  if (remaining.length<=1) { gs.status='finished'; await saveGameState(gs); return; }
   await advanceTurn(gs);
 }
 
-// ─── Play Card ─────────────────────────────────────────────────────────────
+// ─── Play Card ────────────────────────────────────────────────────────────────
 async function playSelectedCard() {
-  if (!gameState) return;
-  const gs = gameState;
-  if (gs.turnOrder[gs.currentTurnIndex] !== myId) return;
-
-  // Find non-combo card
-  const hand = gs.players[myId].hand || [];
-  const nonComboUid = selectedCards.find(uid => {
-    const c = hand.find(c => c.uid === uid);
-    return c && !COMBO_RESOURCES.includes(c.id);
-  });
+  if (isPlayingCard) return;
+  if (!gameState || gameState.turnOrder[gameState.currentTurnIndex]!==myId) return;
+  const hand = gameState.players[myId]?.hand||[];
+  const nonComboUid = selectedCards.find(uid=>{ const c=hand.find(c=>c.uid===uid); return c&&!COMBO_RESOURCES.includes(c.id); });
   if (!nonComboUid) return;
-
-  const cardObj = hand.find(c => c.uid === nonComboUid);
-  if (!cardObj) return;
-
-  await executeCardEffect(cardObj);
+  const cardObj = hand.find(c=>c.uid===nonComboUid); if (!cardObj) return;
+  isPlayingCard = true;
+  try { await executeCardEffect(cardObj); }
+  finally { isPlayingCard = false; }
 }
 
 async function executeCardEffect(cardObj) {
   const gs = JSON.parse(JSON.stringify(gameState));
-  const card = CARDS[cardObj.id];
-  if (!card) return;
-
-  // Remove card from hand
+  const card = CARDS[cardObj.id]; if (!card) return;
   const hand = gs.players[myId].hand;
-  const idx = hand.findIndex(c => c.uid === cardObj.uid);
-  if (idx < 0) return;
-  hand.splice(idx, 1);
-  gs.discard.push(cardObj);
+  const idx = hand.findIndex(c=>c.uid===cardObj.uid); if (idx<0) return;
   selectedCards = [];
 
-  switch (card.type) {
-    case 'ATTACK': await doAttack(gs); break;
-    case 'FUTURE': await doFuture(gs); break;
-    case 'SKIP':   await doSickLeave(gs); break;
-    case 'FAVOR':  await doFavor(gs, cardObj); break;
+  // BUG-030: pre-validate target existence BEFORE removing card
+  // for effects that need a target, check first
+  if (card.type==='FAVOR') {
+    const act = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated && pid!==myId);
+    const valid = act.filter(pid=>!gs.players[pid].protected);
+    if (valid.length===0) { toast('ไม่มีเป้าหมาย (ทุกคนลาป่วย)','error'); return; }
+  }
+  if (card.type==='DEFUSE'||card.type==='NEPO'||card.type==='EXPLODING') {
+    toast('การ์ดนี้ใช้ได้เฉพาะตอนจั่วซองขาวเท่านั้น!','error'); return;
+  }
+  if (card.type==='COMBO') {
+    toast('Combo Resource — เลือก 2+ ใบแล้วกด Combo!','error'); return;
+  }
+
+  // Safe to remove card now
+  hand.splice(idx,1); gs.discard.push(cardObj);
+
+  switch(card.type) {
+    case 'ATTACK':  await doAttack(gs); break;
+    case 'FUTURE':  await doFuture(gs); break;
+    case 'SICK':    await doSickLeave(gs); break;
+    case 'FAVOR':   await doFavor(gs, cardObj.uid); break;
     case 'REVERSE': await doReverse(gs); break;
-    case 'DEFUSE':
-      toast('ไม่สามารถเล่นฟ้องกรมแรงงานได้ตอนนี้ (ใช้ตอนจั่วซองขาวเท่านั้น)', 'error');
-      // Undo remove
-      hand.push(cardObj);
-      gs.discard.pop();
-      return;
-    case 'NEPO':
-      toast('เด็กเส้นใช้ได้ตอนจั่วซองขาวเท่านั้น!', 'error');
-      hand.push(cardObj);
-      gs.discard.pop();
-      return;
-    case 'EXPLODING':
-      toast('ซองขาวเล่นเองไม่ได้!', 'error');
-      hand.push(cardObj);
-      gs.discard.pop();
-      return;
-    case 'COMBO':
-      toast('Combo Resource — ใช้กับ Combo เท่านั้น!', 'error');
-      hand.push(cardObj);
-      gs.discard.pop();
-      return;
     default:
-      toast('ยังไม่รองรับการ์ดนี้', 'warning');
-      hand.push(cardObj);
-      gs.discard.pop();
-      return;
+      toast('ยังไม่รองรับการ์ดนี้','warning');
+      // Return card to hand
+      hand.splice(idx,0,cardObj); gs.discard.pop(); return;
   }
 }
 
-async function doAttack(gs) {
-  // End turn without drawing, give +2 to next player
-  gs.attackDebt += 2;
-  gs.lastAction = `<span class="highlight">${myName}</span> โยนงาน 📋 (+2 จั่ว!)`;
+// ─── Card Effects ─────────────────────────────────────────────────────────────
 
-  // Advance turn (don't draw)
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
+// ATTACK — BUG-054: Cap At Chain system (max 3 chains = max 6 debt)
+async function doAttack(gs) {
+  const MAX_CHAIN = 3;
+  const chain = gs.attackChainCount || 0;
+
+  // Block if chain already at max
+  if (chain >= MAX_CHAIN) {
+    toast('⛔ Attack Chain ครบ 3 ชั้นแล้ว! ไม่สามารถ Stack ได้อีก','error');
+    // Return card to hand (card was removed in executeCardEffect)
+    const hand = gs.players[myId].hand;
+    const discardIdx = gs.discard.map(c=>c.id).lastIndexOf('throw-work');
+    if (discardIdx>=0) hand.push(gs.discard.splice(discardIdx,1)[0]);
+    return;
+  }
+
+  // Add to chain
+  gs.attackChainCount = chain + 1;
+  gs.attackDebt = (gs.attackDebt||0) + 2;
+
+  const chainNow = gs.attackChainCount;
+  gs.lastAction = `<span class="highlight">${myName}</span> 📋 โยนงาน! Chain ${chainNow}/3 (+2 รวม ${gs.attackDebt} จั่ว)`;
+
+  // Advance to next player
   let nextIdx = gs.currentTurnIndex;
-  do {
-    nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
-  } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
+  do { nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length; }
+  while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
   gs.currentTurnIndex = nextIdx;
   gs.turnStartTime = Date.now();
+
+  // If chain = 3, resolve immediately — close chain
+  if (chainNow >= MAX_CHAIN) {
+    gs.lastAction = `<span class="highlight">${myName}</span> 📋 โยนงาน! Chain ครบ 3! 💥 ${gs.players[gs.turnOrder[nextIdx]]?.name} ต้องจั่ว ${gs.attackDebt} ใบ!`;
+    // Chain is now closed — attackChainCount stays at 3 to block further stacking
+    // It resets when the debt is resolved (in _drawOnce)
+  }
   await saveGameState(gs);
 }
 
 async function doFuture(gs) {
-  gs.lastAction = `<span class="highlight">${myName}</span> อัญเชิญแม่หมอ 🔮`;
   const top3 = gs.deck.slice(-3).reverse();
+  gs.lastAction = `<span class="highlight">${myName}</span> 🔮 อัญเชิญแม่หมอ! ดู 3 ใบ`;
   await saveGameState(gs);
   showFutureModal(top3);
 }
 
 function showFutureModal(cards) {
-  const container = document.getElementById('futureCards');
-  container.innerHTML = '';
-  cards.forEach((card, i) => {
-    const c = CARDS[card.id];
-    const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.flexDirection = 'column';
-    wrapper.style.alignItems = 'center';
-    const div = document.createElement('div');
-    div.className = 'future-card';
-    div.innerHTML = `<img src="${cardImg(card.id)}" alt="${c?.name}" onerror="this.outerHTML='<span style=font-size:1.5rem>${c?.emoji||'?'}</span>'">`;
-    const label = document.createElement('div');
-    label.className = 'future-pos';
-    label.textContent = i === 0 ? '⬆ บนสุด' : `ใบที่ ${i+1}`;
-    wrapper.appendChild(div);
-    wrapper.appendChild(label);
-    container.appendChild(wrapper);
+  const container = document.getElementById('futureCards'); container.innerHTML='';
+  cards.forEach((card,i)=>{
+    const c=CARDS[card.id];
+    const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px';
+    const div=document.createElement('div'); div.className='future-card';
+    div.innerHTML=cardThumb(card.id,90);
+    const lbl=document.createElement('div'); lbl.className='future-pos';
+    lbl.textContent=i===0?'⬆ บนสุด':`ใบที่ ${i+1}`;
+    wrap.append(div,lbl); container.appendChild(wrap);
   });
   openModal('futureModal');
 }
 
+// SICK LEAVE — BUG-003 fix: set protected, stays on same player's turn (no advance)
+// BUG-009 fix: protection is cleared at START of player's next turn, not end of current
 async function doSickLeave(gs) {
   gs.players[myId].protected = true;
-  gs.lastAction = `<span class="highlight">${myName}</span> ลาป่วย 🏥 (ป้องกัน 1 รอบ)`;
+  gs.lastAction = `<span class="highlight">${myName}</span> 🏥 ลาป่วย! ป้องกัน Favor/Combo3/Combo4/เด็กเส้น`;
   await saveGameState(gs);
-  toast('🏥 ลาป่วยแล้ว! ป้องกัน Favor, Combo 3/4 ในรอบนี้', 'success');
+  toast('🏥 ลาป่วยแล้ว! กดจั่วไพ่เพื่อจบเทิร์น','success');
 }
 
-async function doFavor(gs, cardObj) {
-  // Check target player not protected
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId);
-  const validTargets = activePlayers.filter(pid => !gs.players[pid].protected);
-
-  if (validTargets.length === 0) { toast('ไม่มีเป้าหมายที่สามารถใช้ได้!', 'error'); return; }
-
-  // Need to pick target via modal then wait for them to choose card
-  gs.lastAction = `<span class="highlight">${myName}</span> ใช้แลกงาน 🔄 (เลือกเป้าหมาย...)`;
-  await saveGameState(gs);
-
-  showTargetModal('เลือกเป้าหมาย — แลกงาน', validTargets, gs, async (targetId) => {
-    // Host or self-execute: ask target to give card
-    // For simplicity: request card via pendingAction in Firebase
+async function doFavor(gs, cardUid) {
+  const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated && pid!==myId);
+  const validTargets = activePlayers.filter(pid=>!gs.players[pid].protected);
+  if (validTargets.length===0) {
+    // BUG-041 fix: return card using uid, not type search
+    const hand = gs.players[myId].hand;
+    const discardIdx = cardUid
+      ? gs.discard.findIndex(c=>c.uid===cardUid)
+      : (gs.discard.findLastIndex ? gs.discard.findLastIndex(c=>c.id==='work-swap')
+         : gs.discard.map(c=>c.id).lastIndexOf('work-swap'));
+    if (discardIdx>=0) { hand.push(gs.discard.splice(discardIdx,1)[0]); }
+    toast('ไม่มีเป้าหมาย (ทุกคนลาป่วย)','error');
+    await saveGameState(gs); return;
+  }
+  showTargetModal('เลือกเป้าหมาย — แลกงาน', validTargets, gs, async targetId=>{
     const newGs = JSON.parse(JSON.stringify(gameState));
+    if (newGs.pendingAction) return;
+    // Open Counter window first — target can counter before favor resolves
     newGs.pendingAction = {
-      type: 'FAVOR_REQUEST',
-      from: myId,
-      fromName: myName,
-      to: targetId,
+      type: 'COUNTER_WINDOW', effectType: 'FAVOR_REQUEST',
+      effectName: 'แลกงาน', from: myId, fromName: myName,
+      targetId, to: targetId
     };
-    newGs.lastAction = `<span class="highlight">${myName}</span> ขอไพ่จาก ${newGs.players[targetId].name} 🔄`;
+    newGs.lastAction = `<span class="highlight">${myName}</span> 🔄 แลกงาน → ${newGs.players[targetId].name} (Counter ได้!)`;
     await saveGameState(newGs);
   });
 }
 
+// REVERSE — BUG-007 fix: attack debt stays as debt value, direction changes for next player
 async function doReverse(gs) {
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
-  if (activePlayers.length === 2) {
-    // Skip
-    gs.lastAction = `<span class="highlight">${myName}</span> HR ปรับโครงสร้าง 📢 (2 คน = Skip!)`;
-    let nextIdx = gs.currentTurnIndex;
-    do {
-      nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
-    } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
-    do {
-      nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
-    } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
-    gs.currentTurnIndex = nextIdx;
+  const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated);
+  if (activePlayers.length===2) {
+    // BUG-019+022: Skip — advance past self back to self (skip opponent)
+    // With only 2 active players, skip = stay on current player's next turn
+    // Advance 2 hops in current direction, skipping eliminated players
+    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (2 คน = Skip)`;
+    let nextIdx=gs.currentTurnIndex; let hops=0; let safety=0;
+    while(hops<2 && safety<gs.turnOrder.length*2) {
+      nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length;
+      if (!gs.players[gs.turnOrder[nextIdx]]?.eliminated) hops++;
+      safety++;
+    }
+    gs.currentTurnIndex=nextIdx;
+    gs.turnStartTime=Date.now(); // BUG-022 fix
   } else {
-    gs.direction = gs.direction * -1;
-    gs.lastAction = `<span class="highlight">${myName}</span> HR ปรับโครงสร้าง 📢 (ทิศทางเปลี่ยน!)`;
-    // Transfer attack debt to new direction's next player (stays as-is, next player gets it)
+    // BUG-007: flip direction — attack debt now travels the new way
+    gs.direction *= -1;
+    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (ทิศทางเปลี่ยน${gs.attackDebt>0?' + ส่ง debt ตามทิศใหม่':''})`;
+    // Don't advance turn — current player already played a card, turn continues
+    // The next player in new direction inherits the attack debt naturally
   }
   gs.turnStartTime = Date.now();
   await saveGameState(gs);
 }
 
-// ─── Combo System ──────────────────────────────────────────────────────────
+// ─── Combo System ─────────────────────────────────────────────────────────────
 async function executeCombo() {
+  if (isPlayingCard) return;
+  if (!gameState || gameState.turnOrder[gameState.currentTurnIndex]!==myId) return;
   const gs = JSON.parse(JSON.stringify(gameState));
-  const hand = gs.players[myId].hand || [];
-  const comboCards = selectedCards.map(uid => hand.find(c => c.uid === uid)).filter(Boolean);
-  const comboResCards = comboCards.filter(c => COMBO_RESOURCES.includes(c.id));
+  const hand = gs.players[myId].hand||[];
+  const comboResCards = selectedCards.map(uid=>hand.find(c=>c.uid===uid)).filter(c=>c&&COMBO_RESOURCES.includes(c.id));
   const n = comboResCards.length;
+  if (n<2) { toast('ต้องการ Combo Resource อย่างน้อย 2 ใบ!','error'); return; }
 
-  if (n < 2) { toast('ต้องการ Combo Resource อย่างน้อย 2 ใบ!', 'error'); return; }
+  // BUG-004: Special mode ต้องชนิดเดียวกันทั้งหมด — ตรวจก่อน remove
+  // Normal mode ใช้ต่างชนิดได้ → ตรวจสอบใน modal แต่ละ combo แทน
+  // เก็บ types ไว้ใช้ตรวจสอบใน Special modal
+  const comboTypes = [...new Set(comboResCards.map(c=>c.id))];
+  const isSameType = comboTypes.length === 1;
 
-  // Remove combo cards from hand
-  comboResCards.forEach(cc => {
-    const idx = hand.findIndex(c => c.uid === cc.uid);
-    if (idx >= 0) { gs.discard.push(hand.splice(idx, 1)[0]); }
-  });
+  // Remove from hand
+  comboResCards.forEach(cc=>{ const i=hand.findIndex(c=>c.uid===cc.uid); if(i>=0) gs.discard.push(hand.splice(i,1)[0]); });
   selectedCards = [];
-
-  if (n === 2) await doCombo2(gs, comboResCards);
-  else if (n === 3) await doCombo3(gs, comboResCards);
-  else if (n === 4) await doCombo4(gs, comboResCards);
-  else if (n >= 5) await doCombo5(gs, comboResCards);
+  isPlayingCard = true;
+  try {
+    if (n===2) await doCombo2(gs, comboResCards, isSameType);
+    else if (n===3) await doCombo3(gs, comboResCards, isSameType);
+    else if (n===4) await doCombo4(gs, comboResCards, isSameType);
+    else await doCombo5(gs, comboResCards, isSameType);
+  } finally { isPlayingCard = false; }
 }
 
-async function doCombo2(gs, cards) {
-  // Normal: look at 2, keep 1
-  const top2 = gs.deck.slice(-2).reverse();
-  if (top2.length === 0) { toast('กองไพ่ว่าง!', 'warning'); return; }
-  gs.lastAction = `<span class="highlight">${myName}</span> Combo 2 🥤🥤 ดูไพ่ 2 ใบ`;
+// COMBO 2
+async function doCombo2(gs, cards, isSameType) {
+  gs.lastAction = `<span class="highlight">${myName}</span> 🥤🥤 Combo 2!`;
   await saveGameState(gs);
-  // For now, draw the top card (simplified - full combo2 would need interaction)
-  showCombo2Modal(gs, top2);
+  showCombo2ModeModal(gs, isSameType);
 }
 
-function showCombo2Modal(gs, cards) {
-  // Simple: show top 2, let player pick 1 to take
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay open';
+function showCombo2ModeModal(gs, isSameType) {
+  const overlay = makeOverlay('combo2ModeOverlay');
+  const specialDisabled = !isSameType;
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-handle"></div>
-      <div class="modal-title">🥤 Combo 2 — เลือก 1 ใบ</div>
-      <div style="display:flex;gap:12px;justify-content:center;margin-bottom:16px;">
-        ${cards.map((c,i) => {
-          const cd = CARDS[c.id];
-          return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;" onclick="window._combo2Pick(${i})">
-            <div class="future-card"><img src="${cardImg(c.id)}" alt="${cd?.name}" onerror="this.outerHTML='<span style=font-size:2rem>${cd?.emoji}</span>'"></div>
-            <div style="font-size:0.75rem;color:var(--text2)">${cd?.name}</div>
-          </div>`;
-        }).join('')}
+      <div class="modal-title">🥤🥤 Combo 2 — เลือก Mode</div>
+      <div class="modal-body" style="gap:10px">
+        <button class="btn btn-primary" style="max-width:none" id="c2Normal">🎴 Normal — ดู 2 ใบ เก็บ 1 (ต่างชนิดได้)</button>
+        <button class="btn btn-accent" style="max-width:none" id="c2Special" ${specialDisabled?'disabled title="ต้องใช้ Combo Resource ชนิดเดียวกัน 2 ใบ"':''}>
+          ⚡ Special — Counter ยกเลิก Effect ศัตรู${specialDisabled?' 🔒 (ต้องชนิดเดียวกัน)':''}
+        </button>
+        <div class="effect-card" style="font-size:0.8rem">
+          Counter ยกเลิกได้: แลกงาน / Combo 3 / Combo 4<br>
+          <span style="color:var(--danger)">Counter ไม่ได้: ซองขาว / โยนงาน / HR / เด็กเส้น</span><br>
+          <span style="color:var(--accent2)">Special ต้องใช้ Combo Resource ชนิดเดียวกัน 2 ใบขึ้นไป</span>
+        </div>
       </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
+    </div>`;
+  document.getElementById('c2Normal').onclick = ()=>{ overlay.remove(); doCombo2Normal(gs); };
+  if (!specialDisabled) document.getElementById('c2Special').onclick = ()=>{ overlay.remove(); doCombo2Counter(gs); };
+}
 
-  window._combo2Pick = async (chosenIdx) => {
-    document.body.removeChild(overlay);
-    const newGs = JSON.parse(JSON.stringify(gameState));
-    const hand = newGs.players[myId].hand;
-    // Remove top 2 from deck, put unchosen back
-    const picked = newGs.deck.pop();
-    if (cards.length > 1) {
-      const other = newGs.deck.pop();
-      const otherCard = chosenIdx === 0 ? (cards.length > 1 ? cards[1] : null) : cards[0];
-      // Put back the one not chosen
-      if (chosenIdx === 0) {
-        if (cards[1]) newGs.deck.push(cards[1]);
-      } else {
-        newGs.deck.push(cards[0]);
-      }
-      hand.push(cards[chosenIdx]);
-    } else {
-      hand.push(picked);
-    }
-    newGs.lastAction = `<span class="highlight">${myName}</span> Combo 2 — หยิบไพ่ 1 ใบ!`;
-    await saveGameState(newGs);
+async function doCombo2Normal(gs) {
+  const latestGs = JSON.parse(JSON.stringify(gameState));
+  const top2 = latestGs.deck.slice(-2).reverse();
+  if (top2.length===0) { toast('กองไพ่ว่าง!','warning'); return; }
+  const overlay = makeOverlay('combo2NormalOverlay');
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🎴 เลือก 1 ใบที่ต้องการ</div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px" id="c2Cards"></div>
+      <div class="text-muted text-center">ใบที่ไม่ได้เลือกจะอยู่ที่กองไพ่ตำแหน่งเดิม</div>
+    </div>`;
+  const c2c = overlay.querySelector('#c2Cards');
+  top2.forEach((card,i)=>{
+    const cd=CARDS[card.id];
+    const cardUidCopy=card.uid; // BUG-020: capture uid in closure
+    const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer';
+    const div=document.createElement('div'); div.style.cssText='width:90px;height:126px;border-radius:12px;overflow:hidden;border:2px solid var(--border)';
+    div.innerHTML=cardThumb(card.id);
+    const name=document.createElement('div'); name.style.cssText='font-size:0.75rem;color:var(--text2);text-align:center'; name.textContent=cd?.name||'?';
+    wrap.append(div,name);
+    wrap.onclick=async()=>{
+      overlay.remove();
+      const ng=JSON.parse(JSON.stringify(gameState));
+      // BUG-020: pop up to 2 cards, pick chosen by uid (safe regardless of deck size)
+      const popped=[];
+      for(let j=0;j<Math.min(2,ng.deck.length);j++) popped.push(ng.deck.pop());
+      // Find chosen card by uid match (safe even if deck changed)
+      const chosenCard = popped.find(c=>c&&c.uid===cardUidCopy) || popped[Math.min(i,popped.length-1)];
+      if (chosenCard) ng.players[myId].hand.push(chosenCard);
+      // Put back all others in original order
+      popped.filter(c=>c&&c!==chosenCard).reverse().forEach(c=>ng.deck.push(c));
+      ng.lastAction=`<span class="highlight">${myName}</span> 🥤🥤 Combo 2 Normal — หยิบ ${cd?.emoji} ${cd?.name}!`;
+      await saveGameState(ng);
+    };
+    c2c.appendChild(wrap);
+  });
+}
+
+function doCombo2Counter(gs) {
+  // Show counter window: announce to other players that a counter window is open
+  const overlay = makeOverlay('combo2CounterOverlay');
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" style="color:var(--accent2)">⚡ Counter Mode ใช้งาน</div>
+      <div class="effect-card">Combo 2 Special ใช้ <strong>ก่อน Effect ของ</strong> แลกงาน / Combo 3 / Combo 4 Resolve<br><br>
+      เมื่อผู้เล่นอื่นใช้การ์ดเหล่านั้น ระบบจะถามคุณโดยอัตโนมัติ<br><br>
+      <span style="color:var(--text2);font-size:0.8rem">Counter จะหมดอายุเมื่อจบเทิร์นนี้</span></div>
+      <div class="modal-actions mt-16"><button class="btn btn-primary" style="max-width:none" id="c2CounterOk">เข้าใจแล้ว ✓</button></div>
+    </div>`;
+  // Set counter flag in game state
+  document.getElementById('c2CounterOk').onclick = async()=>{
+    overlay.remove();
+    const ng=JSON.parse(JSON.stringify(gameState));
+    ng.pendingAction={ type:'COUNTER_ACTIVE', playerId:myId, playerName:myName };
+    ng.lastAction=`<span class="highlight">${myName}</span> ⚡ เปิด Counter Window!`;
+    await saveGameState(ng);
   };
 }
 
-async function doCombo3(gs, cards) {
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId && !gs.players[pid].protected);
-  if (activePlayers.length === 0) { toast('ไม่มีเป้าหมายที่ใช้ได้!', 'error'); return; }
-
-  gs.lastAction = `<span class="highlight">${myName}</span> Combo 3 — เรียกชื่อการ์ด...`;
+// COMBO 3
+async function doCombo3(gs, cards, isSameType) {
+  const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated && pid!==myId && !gs.players[pid].protected);
+  if (activePlayers.length===0) { toast('ไม่มีเป้าหมาย (ทุกคนลาป่วย)','error'); return; }
+  gs.lastAction = `<span class="highlight">${myName}</span> 🥤🥤🥤 Combo 3!`;
   await saveGameState(gs);
-
-  // Show card name picker
-  showCombo3Modal(gs, activePlayers);
+  showCombo3ModeModal(gs, activePlayers, isSameType);
 }
 
-function showCombo3Modal(gs, targets) {
-  const container = document.getElementById('combo3CardSelector');
-  container.innerHTML = '';
-
-  const cardTypes = Object.values(CARDS).filter(c => !['white-envelope','nepo-baby'].includes(c.id));
-  cardTypes.forEach(c => {
-    const item = document.createElement('div');
-    item.className = 'card-sel-item';
-    item.innerHTML = `<img src="${cardImg(c.id)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" onerror="this.outerHTML='<span class=emoji>${c.emoji}</span>'"><span class="name">${c.name}</span>`;
-    item.onclick = () => {
-      closeModal('combo3Modal');
-      // Pick target
-      showTargetModal('เลือกเป้าหมาย', targets, gs, async (targetId) => {
-        const newGs = JSON.parse(JSON.stringify(gameState));
-        const targetHand = newGs.players[targetId].hand || [];
-        const hasCard = targetHand.find(tc => tc.id === c.id);
-        if (hasCard) {
-          // Take it
-          const idx = targetHand.findIndex(tc => tc.id === c.id);
-          targetHand.splice(idx, 1);
-          newGs.players[myId].hand.push(hasCard);
-          newGs.lastAction = `<span class="highlight">${myName}</span> Combo 3 ✓ ได้ ${c.emoji} ${c.name}!`;
-        } else {
-          // Random steal 2
-          for (let i = 0; i < 2; i++) {
-            if (targetHand.length === 0) break;
-            const ri = Math.floor(Math.random() * targetHand.length);
-            const stolen = targetHand.splice(ri, 1)[0];
-            newGs.players[myId].hand.push(stolen);
-          }
-          newGs.lastAction = `<span class="highlight">${myName}</span> Combo 3 ✗ ไม่มี ${c.name} สุ่มขโมย 2 ใบ!`;
-        }
-        await saveGameState(newGs);
-      });
-    };
-    container.appendChild(item);
-  });
-
-  document.getElementById('btnCombo3Cancel').onclick = () => closeModal('combo3Modal');
-  openModal('combo3Modal');
-}
-
-async function doCombo4(gs, cards) {
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated && pid !== myId && !gs.players[pid].protected);
-  if (activePlayers.length === 0) { toast('ไม่มีเป้าหมายที่ใช้ได้!', 'error'); return; }
-
-  gs.lastAction = `<span class="highlight">${myName}</span> Combo 4 — เลือกเป้าหมาย...`;
-  await saveGameState(gs);
-
-  showTargetModal('เลือกเป้าหมาย — Combo 4', activePlayers, gs, async (targetId) => {
-    const newGs = JSON.parse(JSON.stringify(gameState));
-    const targetHand = newGs.players[targetId].hand || [];
-    const targetName = newGs.players[targetId].name;
-
-    // Show target's hand and let player pick
-    document.getElementById('combo4TargetName').textContent = `มือของ ${targetName}`;
-    const container = document.getElementById('combo4Cards');
-    container.innerHTML = '';
-
-    if (targetHand.length === 0) { toast(`${targetName} ไม่มีไพ่ในมือ!`, 'warning'); return; }
-
-    targetHand.forEach((tc, i) => {
-      const cd = CARDS[tc.id];
-      const div = document.createElement('div');
-      div.className = 'hand-card';
-      div.style.width = '80px'; div.style.height = '112px';
-      div.innerHTML = `<img src="${cardImg(tc.id)}" alt="${cd?.name}" onerror="this.outerHTML='<span class=hand-card-emoji>${cd?.emoji}</span>'">`;
-      div.onclick = async () => {
-        closeModal('combo4Modal');
-        const latestGs = JSON.parse(JSON.stringify(gameState));
-        const latestHand = latestGs.players[targetId].hand || [];
-        const stealIdx = latestHand.findIndex(c => c.uid === tc.uid);
-        if (stealIdx >= 0) {
-          const stolen = latestHand.splice(stealIdx, 1)[0];
-          latestGs.players[myId].hand.push(stolen);
-          latestGs.lastAction = `<span class="highlight">${myName}</span> Combo 4 ขโมย ${cd?.emoji} ${cd?.name} จาก ${targetName}!`;
-        }
-        await saveGameState(latestGs);
-      };
-      container.appendChild(div);
-    });
-
-    document.getElementById('btnCombo4Cancel').onclick = () => closeModal('combo4Modal');
-    openModal('combo4Modal');
-  });
-}
-
-async function doCombo5(gs, cards) {
-  const discard = gs.discard.filter(c => c.id !== 'nepo-baby');
-  if (discard.length === 0) { toast('กองทิ้งว่าง!', 'warning'); return; }
-
-  gs.lastAction = `<span class="highlight">${myName}</span> Combo 5 — เลือกจากกองทิ้ง...`;
-  await saveGameState(gs);
-
-  const container = document.getElementById('combo5Grid');
-  container.innerHTML = '';
-
-  // Show unique cards in discard (from newest)
-  const shown = [...discard].reverse().slice(0, 20);
-  shown.forEach(dc => {
-    const cd = CARDS[dc.id];
-    const div = document.createElement('div');
-    div.className = 'discard-grid-card';
-    div.innerHTML = `<img src="${cardImg(dc.id)}" alt="${cd?.name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span>${cd?.emoji||'?'}</span>'">`;
-    div.onclick = async () => {
-      closeModal('combo5Modal');
-      const newGs = JSON.parse(JSON.stringify(gameState));
-      const discardArr = newGs.discard;
-      const idx = discardArr.findIndex(c => c.uid === dc.uid);
-      if (idx >= 0) {
-        const taken = discardArr.splice(idx, 1)[0];
-        newGs.players[myId].hand.push(taken);
-        newGs.lastAction = `<span class="highlight">${myName}</span> Combo 5 หยิบ ${cd?.emoji} ${cd?.name} จากกองทิ้ง!`;
-      }
-      await saveGameState(newGs);
-    };
-    container.appendChild(div);
-  });
-
-  document.getElementById('btnCombo5Cancel').onclick = () => closeModal('combo5Modal');
-  openModal('combo5Modal');
-}
-
-// ─── Favor Response ────────────────────────────────────────────────────────
-function checkPendingActions(prevState) {
-  if (!gameState?.pendingAction) return;
-  const pa = gameState.pendingAction;
-
-  if (pa.type === 'FAVOR_REQUEST' && pa.to === myId) {
-    const hand = gameState.players[myId].hand || [];
-    if (hand.length === 0) {
-      // Auto-resolve: nothing to give
-      resolveFavor(null);
-      return;
-    }
-    showFavorResponse(pa.from, pa.fromName, hand);
-  }
-}
-
-function showFavorResponse(fromId, fromName, hand) {
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay open';
-  overlay.id = 'favorResponseModal';
+function showCombo3ModeModal(gs, targets, isSameType) {
+  const specialDisabled = !isSameType;
+  const overlay = makeOverlay('combo3ModeOverlay');
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-handle"></div>
-      <div class="modal-title">🔄 ${fromName} ขอไพ่ 1 ใบ!</div>
-      <div class="text-muted text-center" style="margin-bottom:12px;">เลือกการ์ดที่จะให้</div>
-      <div class="hand-cards" style="flex-wrap:wrap;" id="favorHandCards"></div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
+      <div class="modal-title">🥤×3 Combo 3 — เลือก Mode</div>
+      <div class="modal-body" style="gap:10px">
+        <button class="btn btn-primary" style="max-width:none" id="c3Normal">🎲 Normal — สุ่มขโมย 1 ใบ (ต่างชนิดได้)</button>
+        <button class="btn btn-accent" style="max-width:none" id="c3Special" ${specialDisabled?'disabled':''}>
+          📢 Special — เรียกชื่อการ์ด${specialDisabled?' 🔒 (ต้องชนิดเดียวกัน)':''}
+        </button>
+        ${specialDisabled?'<div class="effect-card" style="font-size:0.8rem;color:var(--accent2)">Special ต้องใช้ Combo Resource ชนิดเดียวกัน 3 ใบ</div>':''}
+      </div>
+    </div>`;
+  document.getElementById('c3Normal').onclick = ()=>{ overlay.remove(); doCombo3Normal(gs, targets); };
+  if (!specialDisabled) document.getElementById('c3Special').onclick = ()=>{ overlay.remove(); doCombo3Special(gs, targets); };
+}
 
-  const hc = overlay.querySelector('#favorHandCards');
-  hand.forEach(card => {
-    const c = CARDS[card.id];
-    const div = document.createElement('div');
-    div.className = 'hand-card';
-    div.style.width = '80px'; div.style.height = '112px';
-    div.innerHTML = `<img src="${cardImg(card.id)}" alt="${c?.name}" onerror="this.outerHTML='<span class=hand-card-emoji>${c?.emoji}</span>'">`;
-    div.onclick = async () => {
-      overlay.remove();
-      await resolveFavor(card, fromId);
+async function doCombo3Normal(gs, targets) {
+  showTargetModal('เลือกเป้าหมาย — Combo 3 Normal', targets, gs, async targetId=>{
+    // BUG-018: open Counter Window for target before resolving steal
+    const ng=JSON.parse(JSON.stringify(gameState));
+    if (ng.pendingAction) return;
+    ng.pendingAction={
+      type:'COUNTER_WINDOW', effectType:'COMBO3_NORMAL',
+      effectName:'Combo 3 (สุ่มขโมย)', from:myId, fromName:myName, targetId, to:targetId
     };
+    ng.lastAction=`<span class="highlight">${myName}</span> 🥤×3 Combo 3 Normal → ${ng.players[targetId].name} (Counter ได้!)`;
+    await saveGameState(ng);
+  });
+}
+
+async function resolveCombo3Normal(targetId) {
+  const ng=JSON.parse(JSON.stringify(gameState));
+  const tHand=ng.players[targetId].hand||[];
+  if (tHand.length===0) { toast(`${ng.players[targetId].name} ไม่มีไพ่!`,'warning'); ng.pendingAction=null; await saveGameState(ng); return; }
+  const ri=Math.floor(Math.random()*tHand.length);
+  const stolen=tHand.splice(ri,1)[0];
+  ng.players[myId].hand.push(stolen);
+  ng.pendingAction=null;
+  ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 ขโมย ${CARDS[stolen.id]?.emoji} จาก ${ng.players[targetId].name}!`;
+  await saveGameState(ng);
+}
+
+function doCombo3Special(gs, targets) {
+  showTargetModal('เลือกเป้าหมาย — Combo 3 Special', targets, gs, async targetId=>{
+    // BUG-018: open Counter Window for target before card picker
+    const ng=JSON.parse(JSON.stringify(gameState));
+    if (ng.pendingAction) return;
+    ng.pendingAction={
+      type:'COUNTER_WINDOW', effectType:'COMBO3_SPECIAL',
+      effectName:'Combo 3 Special (เรียกชื่อการ์ด)', from:myId, fromName:myName, targetId, to:targetId
+    };
+    ng.lastAction=`<span class="highlight">${myName}</span> 🥤×3 Combo 3 Special → ${ng.players[targetId].name} (Counter ได้!)`;
+    await saveGameState(ng);
+  });
+}
+
+function showCombo3CardPicker(targetId) {
+  const container = document.getElementById('combo3CardSelector'); container.innerHTML='';
+  const cardTypes = Object.values(CARDS).filter(c=>!['white-envelope','nepo-baby'].includes(c.id));
+  cardTypes.forEach(c=>{
+    const item=document.createElement('div'); item.className='card-sel-item';
+    const imgDiv=document.createElement('div'); imgDiv.style.cssText='width:100%;flex:1;overflow:hidden;border-radius:6px;';
+    imgDiv.innerHTML=cardThumb(c.id,60);
+    const name=document.createElement('span'); name.className='name'; name.textContent=c.name;
+    item.append(imgDiv,name);
+    item.onclick=async()=>{
+      closeModal('combo3Modal');
+      const ng=JSON.parse(JSON.stringify(gameState));
+      const tHand=ng.players[targetId].hand||[];
+      const found=tHand.find(tc=>tc.id===c.id);
+      if (found) {
+        tHand.splice(tHand.indexOf(found),1);
+        ng.players[myId].hand.push(found);
+        ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✓ ได้ ${c.emoji} ${c.name}!`;
+      } else {
+        // Steal 2 random
+        for(let i=0;i<2&&tHand.length>0;i++){
+          const ri=Math.floor(Math.random()*tHand.length);
+          ng.players[myId].hand.push(tHand.splice(ri,1)[0]);
+        }
+        ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✗ ไม่มี ${c.name} สุ่มขโมย 2 ใบ!`;
+      }
+      await saveGameState(ng);
+    };
+    container.appendChild(item);
+  });
+  document.getElementById('btnCombo3Cancel').onclick=()=>closeModal('combo3Modal');
+  openModal('combo3Modal');
+}
+
+// COMBO 4
+async function doCombo4(gs, cards, isSameType) {
+  const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated && pid!==myId && !gs.players[pid].protected);
+  if (activePlayers.length===0) { toast('ไม่มีเป้าหมาย','error'); return; }
+  gs.lastAction=`<span class="highlight">${myName}</span> 🥤×4 Combo 4!`;
+  await saveGameState(gs);
+  showCombo4ModeModal(gs, activePlayers, isSameType);
+}
+
+function showCombo4ModeModal(gs, targets, isSameType) {
+  const specialDisabled = !isSameType;
+  const overlay=makeOverlay('combo4ModeOverlay');
+  overlay.innerHTML=`
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🥤×4 Combo 4 — เลือก Mode</div>
+      <div class="modal-body" style="gap:10px">
+        <button class="btn btn-primary" style="max-width:none" id="c4Normal">👁️ Normal — ดูไพ่ในมือทั้งหมด (ต่างชนิดได้)</button>
+        <button class="btn btn-accent" style="max-width:none" id="c4Special" ${specialDisabled?'disabled':''}>
+          🎯 Special — ดูไพ่ทั้งหมด แล้วเลือกขโมย 1 ใบ${specialDisabled?' 🔒 (ต้องชนิดเดียวกัน)':''}
+        </button>
+        ${specialDisabled?'<div class="effect-card" style="font-size:0.8rem;color:var(--accent2)">Special ต้องใช้ Combo Resource ชนิดเดียวกัน 4 ใบ</div>':''}
+      </div>
+    </div>`;
+  document.getElementById('c4Normal').onclick=()=>{ overlay.remove(); doCombo4Normal(gs,targets); };
+  if (!specialDisabled) document.getElementById('c4Special').onclick=()=>{ overlay.remove(); doCombo4Special(gs,targets); };
+}
+
+function doCombo4Normal(gs, targets) {
+  showTargetModal('เลือกเป้าหมาย — Combo 4 Normal', targets, gs, targetId=>{
+    const p=gs.players[targetId];
+    const hand=p.hand||[];
+    const overlay=makeOverlay('combo4NormalOverlay');
+    overlay.innerHTML=`
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">👁️ ไพ่ในมือของ ${p.name}</div>
+        <div class="hand-cards" style="flex-wrap:wrap;justify-content:center" id="c4NormalCards"></div>
+        <div class="modal-actions mt-16"><button class="btn btn-ghost" style="max-width:none" id="c4NormalClose">ปิด (ดูแล้ว)</button></div>
+      </div>`;
+    const c=overlay.querySelector('#c4NormalCards');
+    if (hand.length===0) c.innerHTML='<div style="color:var(--text2);padding:20px">ไม่มีไพ่ในมือ</div>';
+    hand.forEach(card=>{
+      const div=document.createElement('div'); div.style.cssText='width:80px;height:112px;border-radius:10px;overflow:hidden;border:1px solid var(--border);flex-shrink:0';
+      div.innerHTML=cardThumb(card.id,80); c.appendChild(div);
+    });
+    overlay.querySelector('#c4NormalClose').onclick=()=>overlay.remove();
+  });
+}
+
+function doCombo4Special(gs, targets) {
+  showTargetModal('เลือกเป้าหมาย — Combo 4 Special', targets, gs, async targetId=>{
+    // BUG-018: open Counter Window for target before showing cards
+    const ng0=JSON.parse(JSON.stringify(gameState));
+    if (ng0.pendingAction) return;
+    ng0.pendingAction={
+      type:'COUNTER_WINDOW', effectType:'COMBO4_SPECIAL',
+      effectName:'Combo 4 Special (เลือกขโมย)', from:myId, fromName:myName, targetId, to:targetId
+    };
+    ng0.lastAction=`<span class="highlight">${myName}</span> 🥤×4 Combo 4 Special → ${ng0.players[targetId].name} (Counter ได้!)`;
+    await saveGameState(ng0);
+    // actual steal modal opens after counter resolves (in resolveCounter → COMBO4_SPECIAL path)
+  });
+}
+
+function _showCombo4StealModal(targetId) {
+    const ng=JSON.parse(JSON.stringify(gameState));
+    const p=ng.players[targetId]; const hand=p.hand||[];
+    document.getElementById('combo4TargetName').textContent=`ไพ่ในมือของ ${p.name} — เลือก 1 ใบ`;
+    const container=document.getElementById('combo4Cards'); container.innerHTML='';
+    if (hand.length===0) { toast(`${p.name} ไม่มีไพ่!`,'warning'); return; }
+    hand.forEach(card=>{
+      const cd=CARDS[card.id];
+      const div=document.createElement('div'); div.className='hand-card'; div.style.cssText='width:80px;height:112px;flex-shrink:0';
+      div.innerHTML=cardThumb(card.id,80);
+      div.onclick=async()=>{
+        closeModal('combo4Modal');
+        const ng2=JSON.parse(JSON.stringify(gameState));
+        const tHand=ng2.players[targetId].hand||[];
+        const si=tHand.findIndex(c=>c.uid===card.uid);
+        if (si>=0) {
+          const stolen=tHand.splice(si,1)[0];
+          ng2.players[myId].hand.push(stolen);
+          ng2.pendingAction=null;
+          ng2.lastAction=`<span class="highlight">${myName}</span> Combo 4 ขโมย ${cd?.emoji} ${cd?.name} จาก ${p.name}!`;
+        }
+        await saveGameState(ng2);
+      };
+      container.appendChild(div);
+    });
+    document.getElementById('btnCombo4Cancel').onclick=()=>closeModal('combo4Modal');
+    openModal('combo4Modal');
+}
+
+// COMBO 5 Normal: pick from discard (no nepo baby)
+// Combo 5 Special: ร้องเรียนผู้บริหาร — only during defuse, handled in showDefuseModal
+async function doCombo5(gs, cards, isSameType) {
+  const discard=gs.discard.filter(c=>c.id!=='nepo-baby');
+  if (discard.length===0) { toast('กองทิ้งว่าง!','warning'); return; }
+  gs.lastAction=`<span class="highlight">${myName}</span> 🥤×5 Combo 5 — เลือกจากกองทิ้ง`;
+  await saveGameState(gs);
+  const container=document.getElementById('combo5Grid'); container.innerHTML='';
+  [...discard].reverse().slice(0,20).forEach(dc=>{
+    const cd=CARDS[dc.id];
+    const div=document.createElement('div'); div.className='discard-grid-card'; div.style.cursor='pointer';
+    div.innerHTML=`<img src="${cardImg(dc.id)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span style=font-size:1.5rem>${cd?.emoji||'?'}</span>'">`;
+    div.onclick=async()=>{
+      closeModal('combo5Modal');
+      const ng=JSON.parse(JSON.stringify(gameState));
+      const idx=ng.discard.findIndex(c=>c.uid===dc.uid);
+      if (idx>=0) {
+        const taken=ng.discard.splice(idx,1)[0];
+        ng.players[myId].hand.push(taken);
+        ng.lastAction=`<span class="highlight">${myName}</span> Combo 5 หยิบ ${cd?.emoji} ${cd?.name} จากกองทิ้ง!`;
+      }
+      await saveGameState(ng);
+    };
+    container.appendChild(div);
+  });
+  document.getElementById('btnCombo5Cancel').onclick=()=>closeModal('combo5Modal');
+  openModal('combo5Modal');
+}
+
+// ─── Pending Actions ───────────────────────────────────────────────────────────
+let counterModalOpen = false;
+
+function checkPendingActions(prevState) {
+  if (!gameState?.pendingAction) {
+    // pendingAction cleared — close counter modal if open
+    if (counterModalOpen) { counterModalOpen=false; closeModal('counterModal'); }
+    return;
+  }
+  const pa = gameState.pendingAction;
+
+  // FAVOR REQUEST — target sees modal to give a card
+  if (pa.type==='FAVOR_REQUEST' && pa.to===myId) {
+    if (favorResponseOpen) return;
+    const hand=gameState.players[myId].hand||[];
+    if (hand.length===0) { resolveFavor(null, pa.from); return; }
+    showFavorResponse(pa.from, pa.fromName, hand);
+  }
+
+  // WHITE_ENVELOPE_IN_DECK — warn target that nepo sent bomb their way
+  if (pa.type==='WHITE_ENVELOPE_IN_DECK_FOR' && pa.targetId===myId) {
+    toast(`👶 เด็กเส้น! ซองขาวอยู่บนกองไพ่ของคุณแล้ว! เตรียมฟ้องกรมแรงงาน!`, 'error', 4000);
+    return;
+  }
+
+  // RESOLVE after counter passed — only the original attacker resolves
+  if (pa.type==='RESOLVE_COMBO3_NORMAL' && pa.from===myId) {
+    resolveCombo3Normal(pa.targetId);
+  }
+  if (pa.type==='RESOLVE_COMBO3_SPECIAL' && pa.from===myId) {
+    showCombo3CardPicker(pa.targetId);
+  }
+  if (pa.type==='RESOLVE_COMBO4_SPECIAL' && pa.from===myId) {
+    _showCombo4StealModal(pa.targetId);
+  }
+
+  // COUNTER WINDOW — show only if target has Combo 2 in hand (same type x2)
+  if (pa.type==='COUNTER_WINDOW' && pa.targetId===myId) {
+    if (counterModalOpen) return;
+    const hand=gameState.players[myId]?.hand||[];
+    // Check: has 2 combo resources of same type
+    const typeCounts={};
+    hand.forEach(c=>{ if(COMBO_RESOURCES.includes(c.id)) typeCounts[c.id]=(typeCounts[c.id]||0)+1; });
+    const canCounter = Object.values(typeCounts).some(v=>v>=2);
+    if (!canCounter) {
+      // Auto-pass: no valid combo 2
+      resolveCounter(false, pa);
+      return;
+    }
+    showCounterModal(pa);
+  }
+}
+
+function showCounterModal(pa) {
+  counterModalOpen = true;
+  const el = document.getElementById('counterMessage');
+  el.innerHTML = `<strong>${pa.fromName}</strong> ใช้ <strong>${pa.effectName}</strong> มาที่คุณ!<br>
+    <span style="color:var(--accent2)">คุณมี Combo 2 (ชนิดเดียวกัน) — Counter ยกเลิก Effect ได้!</span>`;
+  document.getElementById('btnCounter').onclick = ()=>{ closeModal('counterModal'); counterModalOpen=false; resolveCounter(true, pa); };
+  document.getElementById('btnCounterPass').onclick = ()=>{ closeModal('counterModal'); counterModalOpen=false; resolveCounter(false, pa); };
+  openModal('counterModal');
+}
+
+async function resolveCounter(didCounter, pa) {
+  const ng=JSON.parse(JSON.stringify(gameState));
+  if (!ng.pendingAction || ng.pendingAction.type!=='COUNTER_WINDOW') return;
+  if (didCounter) {
+    // Remove 2 same-type combo resources from hand
+    const hand=ng.players[myId].hand;
+    const typeCounts={};
+    hand.forEach(c=>{ if(COMBO_RESOURCES.includes(c.id)) typeCounts[c.id]=(typeCounts[c.id]||0)+1; });
+    const counterType=Object.entries(typeCounts).find(([,v])=>v>=2)?.[0];
+    if (counterType) {
+      let removed=0;
+      for(let i=hand.length-1;i>=0&&removed<2;i--){
+        if(hand[i].id===counterType){ ng.discard.push(hand.splice(i,1)[0]); removed++; }
+      }
+    }
+    ng.pendingAction=null;
+    ng.lastAction=`<span class="highlight">${myName}</span> ⚡ Counter! ยกเลิก ${pa.effectName}!`;
+  } else {
+    // Pass — mark counter window closed, proceed with effect
+    // Counter passed — proceed with original effect
+    if (pa.effectType==='FAVOR_REQUEST') {
+      ng.pendingAction={ type:'FAVOR_REQUEST', from:pa.from, fromName:pa.fromName, to:pa.targetId };
+    } else if (pa.effectType==='COMBO3_NORMAL') {
+      ng.pendingAction={ type:'RESOLVE_COMBO3_NORMAL', from:pa.from, targetId:pa.targetId };
+    } else if (pa.effectType==='COMBO3_SPECIAL') {
+      ng.pendingAction={ type:'RESOLVE_COMBO3_SPECIAL', from:pa.from, targetId:pa.targetId };
+    } else if (pa.effectType==='COMBO4_SPECIAL') {
+      ng.pendingAction={ type:'RESOLVE_COMBO4_SPECIAL', from:pa.from, targetId:pa.targetId };
+    } else {
+      ng.pendingAction=null;
+    }
+    ng.lastAction=`${pa.fromName} ใช้ ${pa.effectName} — ดำเนินการต่อ...`;
+  }
+  await saveGameState(ng);
+}
+
+function showFavorResponse(fromId, fromName, hand) {
+  favorResponseOpen = true; // BUG-008 guard
+  // Remove any existing modal
+  document.getElementById('favorResponseModal')?.remove();
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay open'; overlay.id='favorResponseModal';
+  overlay.innerHTML=`
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🔄 ${fromName} ขอไพ่ 1 ใบ!</div>
+      <div class="text-muted text-center" style="margin-bottom:12px">เลือกการ์ดที่จะให้</div>
+      <div class="hand-cards" style="flex-wrap:wrap;justify-content:center" id="favorHandCards"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const hc=overlay.querySelector('#favorHandCards');
+  hand.forEach(card=>{
+    const cd=CARDS[card.id];
+    const div=document.createElement('div'); div.className='hand-card'; div.style.cssText='width:80px;height:112px;flex-shrink:0';
+    div.innerHTML=cardThumb(card.id,80);
+    div.onclick=async()=>{ overlay.remove(); favorResponseOpen=false; await resolveFavor(card, fromId); };
     hc.appendChild(div);
   });
 }
 
 async function resolveFavor(card, fromId) {
-  const newGs = JSON.parse(JSON.stringify(gameState));
-  if (card && fromId) {
-    const myHand = newGs.players[myId].hand;
-    const idx = myHand.findIndex(c => c.uid === card.uid);
-    if (idx >= 0) {
-      const given = myHand.splice(idx, 1)[0];
-      newGs.players[fromId].hand.push(given);
-      newGs.lastAction = `<span class="highlight">${myName}</span> ให้ ${CARDS[given.id]?.emoji} ${CARDS[given.id]?.name} แก่ ${newGs.players[fromId].name}`;
+  const ng=JSON.parse(JSON.stringify(gameState));
+  if (card && fromId && ng.players[fromId]) {
+    const myHand=ng.players[myId].hand;
+    const idx=myHand.findIndex(c=>c.uid===card.uid);
+    if (idx>=0) {
+      const given=myHand.splice(idx,1)[0];
+      ng.players[fromId].hand.push(given);
+      ng.lastAction=`<span class="highlight">${myName}</span> ให้ ${CARDS[given.id]?.emoji} ${CARDS[given.id]?.name} แก่ ${ng.players[fromId].name}`;
     }
   }
-  newGs.pendingAction = null;
-  await saveGameState(newGs);
+  ng.pendingAction=null;
+  await saveGameState(ng);
 }
 
-// ─── Advance Turn ──────────────────────────────────────────────────────────
+// ─── Advance Turn ─────────────────────────────────────────────────────────────
+// BUG-009 fix: clear protection at START of player's turn, not end
 async function advanceTurn(gs) {
-  // Clear protection for current player after their turn ends
-  gs.players[myId].protected = false;
-
-  const activePlayers = gs.turnOrder.filter(pid => !gs.players[pid].eliminated);
-  if (activePlayers.length <= 1) {
-    gs.status = 'finished';
-    if (activePlayers.length === 1) {
-      gs.lastAction = `🏆 <span class="highlight">${gs.players[activePlayers[0]].name}</span> ชนะเกม!`;
-    }
-    await saveGameState(gs);
-    return;
+  // BUG-054: reset attack chain if debt is 0 (fully resolved)
+  if ((gs.attackDebt||0) === 0) gs.attackChainCount = 0;
+  const activePlayers=gs.turnOrder.filter(pid=>!gs.players[pid].eliminated);
+  if (activePlayers.length<=1) {
+    gs.status='finished';
+    if (activePlayers.length===1) gs.lastAction=`🏆 <span class="highlight">${gs.players[activePlayers[0]].name}</span> ชนะเกม!`;
+    await saveGameState(gs); return;
   }
-
-  // Attack debt: if next player has debt, keep it
-  let nextIdx = gs.currentTurnIndex;
+  // BUG-021: clear pendingAction if target/recipient is eliminated or no longer valid
+  if (gs.pendingAction) {
+    const pa = gs.pendingAction;
+    const targetElim = pa.targetId && gs.players[pa.targetId]?.eliminated;
+    const toElim = pa.to && gs.players[pa.to]?.eliminated;
+    if (targetElim || toElim) gs.pendingAction = null;
+  }
+  let nextIdx=gs.currentTurnIndex;
+  let safetyCount=0;
+  const maxHops = gs.turnOrder.length + 1;
   do {
-    nextIdx = (nextIdx + gs.direction + gs.turnOrder.length) % gs.turnOrder.length;
+    nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length;
+    safetyCount++;
+    if (safetyCount>maxHops) {
+      // BUG-032: safety — all players eliminated somehow, force finish
+      gs.status='finished'; gs.lastAction='เกมจบแล้ว (ไม่มีผู้เล่น)';
+      await saveGameState(gs); return;
+    }
   } while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
-
-  gs.currentTurnIndex = nextIdx;
-  gs.turnStartTime = Date.now();
+  gs.currentTurnIndex=nextIdx;
+  // BUG-009: clear protection for the INCOMING player (start of their turn)
+  gs.players[gs.turnOrder[nextIdx]].protected=false;
+  gs.turnStartTime=Date.now();
   await saveGameState(gs);
 }
 
-// ─── Target Modal Helper ───────────────────────────────────────────────────
-function showTargetModal(title, playerIds, gs, onSelect) {
-  document.getElementById('targetModalTitle').textContent = title;
-  const list = document.getElementById('targetList');
-  list.innerHTML = '';
+// ─── Discard Viewer (BUG-014: realtime update while open) ───────────────────────
+let discardViewerOpen = false;
 
-  playerIds.forEach(pid => {
-    const p = gs.players[pid];
-    const item = document.createElement('div');
-    item.className = 'target-item';
-    item.innerHTML = `<div class="target-avatar">👤</div><div class="target-name">${p.name}</div><div class="target-count">${(p.hand||[]).length} ใบ</div>`;
-    item.onclick = () => { closeModal('targetModal'); onSelect(pid); };
-    list.appendChild(item);
-  });
-
-  document.getElementById('btnTargetCancel').onclick = () => closeModal('targetModal');
-  openModal('targetModal');
+function renderDiscardGrid() {
+  if (!discardViewerOpen || !gameState) return;
+  const grid=document.getElementById('discardGrid'); grid.innerHTML='';
+  const discard=[...(gameState.discard||[])].reverse();
+  if (discard.length===0) {
+    grid.innerHTML='<div style="color:var(--text2);text-align:center;padding:20px;grid-column:span 4">ยังไม่มีไพ่ในกองทิ้ง</div>';
+  } else {
+    discard.forEach(dc=>{
+      const div=document.createElement('div'); div.className='discard-grid-card';
+      div.innerHTML=`<img src="${cardImg(dc.id)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span style=font-size:1.5rem>${CARDS[dc.id]?.emoji||'?'}</span>'">`;
+      grid.appendChild(div);
+    });
+  }
 }
 
-// ─── Discard Viewer ────────────────────────────────────────────────────────
 function showDiscardViewer() {
   if (!gameState) return;
-  const grid = document.getElementById('discardGrid');
-  grid.innerHTML = '';
-  const discard = [...(gameState.discard || [])].reverse();
-  discard.forEach(dc => {
-    const cd = CARDS[dc.id];
-    const div = document.createElement('div');
-    div.className = 'discard-grid-card';
-    div.innerHTML = `<img src="${cardImg(dc.id)}" alt="${cd?.name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span style=font-size:1.5rem>${cd?.emoji||'?'}</span>'">`;
-    grid.appendChild(div);
-  });
-  if (discard.length === 0) grid.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px;grid-column:span 4">ยังไม่มีไพ่ในกองทิ้ง</div>';
+  discardViewerOpen = true;
+  renderDiscardGrid();
   openModal('discardModal');
 }
 
-// ─── Save Game State ────────────────────────────────────────────────────────
-async function saveGameState(gs) {
-  gs.version = (gs.version || 0) + 1;
-  await set(ref(db, `rooms/${roomCode}/gameState`), gs);
+// ─── Target Modal ─────────────────────────────────────────────────────────────
+function showTargetModal(title, playerIds, gs, onSelect) {
+  document.getElementById('targetModalTitle').textContent=title;
+  const list=document.getElementById('targetList'); list.innerHTML='';
+  playerIds.forEach(pid=>{
+    const p=gs.players[pid];
+    const item=document.createElement('div'); item.className='target-item';
+    item.innerHTML=`<div class="target-avatar">👤</div><div class="target-name">${p.name}</div><div class="target-count">${(p.hand||[]).length} ใบ</div>`;
+    item.onclick=()=>{ closeModal('targetModal'); onSelect(pid); };
+    list.appendChild(item);
+  });
+  document.getElementById('btnTargetCancel').onclick=()=>closeModal('targetModal');
+  openModal('targetModal');
 }
 
-// ─── Event Listeners ────────────────────────────────────────────────────────
-document.getElementById('btnCreate').onclick = async () => {
-  const name = document.getElementById('playerName').value.trim();
-  if (!name) { toast('ใส่ชื่อก่อน!', 'error'); return; }
-  await createRoom(name);
+// ─── Helper: Dynamic Overlay ──────────────────────────────────────────────────
+function makeOverlay(id) {
+  document.getElementById(id)?.remove();
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay open'; overlay.id=id;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+// ─── Win ──────────────────────────────────────────────────────────────────────
+function handleWin(activePlayers) {
+  clearInterval(timerInterval);
+  const winnerId=activePlayers[0];
+  if (!winnerId) return;
+  const winnerName=gameState.players[winnerId]?.name||'?';
+  document.getElementById('winnerName').textContent=winnerId===myId?'🏆 คุณชนะ!':`🏆 ${winnerName} ชนะ!`;
+  document.getElementById('winnerOverlay').classList.add('show');
+}
+
+// ─── Session Persistence ───────────────────────────────────────────────────────
+const SESSION_KEY='office_survivor_session';
+function saveSession() {
+  try { sessionStorage.setItem(SESSION_KEY,JSON.stringify({myId,myName,roomCode,isHost})); } catch(e){}
+}
+function loadSession() {
+  try { const r=sessionStorage.getItem(SESSION_KEY); return r?JSON.parse(r):null; } catch(e){return null;}
+}
+function clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch(e){}
+}
+async function tryRestoreSession() {
+  const s=loadSession();
+  if (!s?.myId||!s?.roomCode) return false;
+  myId=s.myId; myName=s.myName; roomCode=s.roomCode; isHost=s.isHost;
+  try {
+    const snap=await get(ref(db,`rooms/${roomCode}`));
+    if (snap.exists()) {
+      const room=snap.val();
+      document.getElementById('displayRoomCode').textContent=roomCode;
+      if (room.status==='playing' && room.gameState) {
+        gameState=room.gameState;
+        listenRoom(roomCode);      // BUG-024: always attach room listener for closure detection
+        listenGameState();
+        showScreen('gameScreen');
+        return true;
+      } else if (room.status==='lobby') {
+        listenRoom(roomCode);
+        showScreen('roomScreen');
+        return true;
+      }
+    }
+  } catch(e){}
+  clearSession(); return false;
+}
+
+// ─── Event Listeners ───────────────────────────────────────────────────────────
+document.getElementById('btnCreate').onclick=async()=>{
+  const name=document.getElementById('playerName').value.trim();
+  if (!name){toast('ใส่ชื่อก่อน!','error');return;} await createRoom(name);
 };
-
-document.getElementById('btnJoin').onclick = async () => {
-  const name = document.getElementById('playerName').value.trim();
-  const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
-  if (!name) { toast('ใส่ชื่อก่อน!', 'error'); return; }
-  if (code.length !== 4) { toast('รหัสห้องต้อง 4 ตัว!', 'error'); return; }
-  await joinRoom(code, name);
+document.getElementById('btnJoin').onclick=async()=>{
+  const name=document.getElementById('playerName').value.trim();
+  const code=document.getElementById('roomCodeInput').value.trim().toUpperCase();
+  if (!name){toast('ใส่ชื่อก่อน!','error');return;}
+  if (code.length!==4){toast('รหัสห้องต้อง 4 ตัว!','error');return;}
+  await joinRoom(code,name);
 };
-
-document.getElementById('playerName').addEventListener('keypress', e => {
-  if (e.key === 'Enter') document.getElementById('btnCreate').click();
-});
-document.getElementById('roomCodeInput').addEventListener('keypress', e => {
-  if (e.key === 'Enter') document.getElementById('btnJoin').click();
-});
-document.getElementById('roomCodeInput').addEventListener('input', e => {
-  e.target.value = e.target.value.toUpperCase();
-});
-
-document.getElementById('btnReady').onclick = async () => {
-  const snap = await get(ref(db, `rooms/${roomCode}/players/${myId}/ready`));
-  const current = snap.val();
-  await set(ref(db, `rooms/${roomCode}/players/${myId}/ready`), !current);
-  document.getElementById('btnReady').textContent = !current ? '✅ พร้อมแล้ว (คลิกยกเลิก)' : '✅ พร้อมแล้ว';
+document.getElementById('playerName').addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('btnCreate').click();});
+document.getElementById('roomCodeInput').addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('btnJoin').click();});
+document.getElementById('roomCodeInput').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase();});
+document.getElementById('btnReady').onclick=async()=>{
+  const snap=await get(ref(db,`rooms/${roomCode}/players/${myId}/ready`));
+  const cur=snap.val();
+  await set(ref(db,`rooms/${roomCode}/players/${myId}/ready`),!cur);
+  document.getElementById('btnReady').textContent=!cur?'✅ พร้อมแล้ว (กดยกเลิก)':'✅ พร้อมแล้ว';
 };
-
-document.getElementById('btnStartGame').onclick = hostStartGame;
-
-document.getElementById('btnLeaveRoom').onclick = async () => {
+document.getElementById('btnStartGame').onclick=hostStartGame;
+document.getElementById('btnLeaveRoom').onclick=async()=>{
+  clearSession();
   if (isHost) {
-    await remove(ref(db, `rooms/${roomCode}`));
+    // BUG-055: reassign host to another player instead of deleting room
+    const snap = await get(ref(db,`rooms/${roomCode}/players`));
+    const players = snap.val()||{};
+    const others = Object.entries(players).filter(([pid])=>pid!==myId);
+    if (others.length > 0) {
+      // Pick next host (first remaining player)
+      const [newHostId, newHostData] = others[0];
+      await update(ref(db,`rooms/${roomCode}`), { host: newHostId });
+      await update(ref(db,`rooms/${roomCode}/players/${newHostId}`), { host: true });
+      await remove(ref(db,`rooms/${roomCode}/players/${myId}`));
+      toast(`${newHostData.name} เป็น Host คนใหม่แล้ว`,'info');
+    } else {
+      // No other players — delete room
+      await remove(ref(db,`rooms/${roomCode}`));
+    }
   } else {
-    await remove(ref(db, `rooms/${roomCode}/players/${myId}`));
+    await remove(ref(db,`rooms/${roomCode}/players/${myId}`));
   }
   showScreen('homeScreen');
 };
-
-document.getElementById('btnCopyCode').onclick = () => {
-  const code = document.getElementById('displayRoomCode').textContent;
-  const url = `${location.href.split('?')[0]}?room=${code}`;
-  navigator.clipboard.writeText(url).then(() => toast('คัดลอก link แล้ว! 📋', 'success'));
+document.getElementById('btnCopyCode').onclick=()=>{
+  const code=document.getElementById('displayRoomCode').textContent;
+  const url=`${location.href.split('?')[0]}?room=${code}`;
+  navigator.clipboard.writeText(url).then(()=>toast('คัดลอก link แล้ว! 📋','success'));
 };
-
-document.getElementById('btnPlayCard').onclick = playSelectedCard;
-document.getElementById('btnCombo').onclick = executeCombo;
-document.getElementById('btnDraw').onclick = drawCard;
-document.getElementById('deckPile').onclick = drawCard;
-document.getElementById('discardPile').onclick = showDiscardViewer;
-
-document.getElementById('btnCardDetailClose').onclick = () => closeModal('cardDetailModal');
-document.getElementById('btnFutureClose').onclick = () => closeModal('futureModal');
-document.getElementById('btnDiscardClose').onclick = () => closeModal('discardModal');
-
-document.getElementById('btnDismissEliminated').onclick = () => {
-  document.getElementById('eliminatedOverlay').classList.remove('show');
-};
-
-document.getElementById('btnPlayAgain').onclick = async () => {
+document.getElementById('btnPlayCard').onclick=playSelectedCard;
+document.getElementById('btnCombo').onclick=executeCombo;
+document.getElementById('btnDraw').onclick=drawCard;
+document.getElementById('deckPile').onclick=()=>{ if(gameState?.turnOrder[gameState?.currentTurnIndex]===myId) drawCard(); };
+document.getElementById('discardPile').onclick=showDiscardViewer;
+document.getElementById('btnCardDetailClose').onclick=()=>closeModal('cardDetailModal');
+document.getElementById('btnFutureClose').onclick=()=>closeModal('futureModal');
+document.getElementById('btnDiscardClose').onclick=()=>{ discardViewerOpen=false; closeModal('discardModal'); };
+document.getElementById('btnDismissEliminated').onclick=()=>document.getElementById('eliminatedOverlay').classList.remove('show');
+document.getElementById('btnPlayAgain').onclick=async()=>{
   document.getElementById('winnerOverlay').classList.remove('show');
-  if (isHost) {
-    await update(ref(db, `rooms/${roomCode}`), { status: 'lobby', gameState: null });
-    showScreen('roomScreen');
+  clearSession();
+  if (isHost){await update(ref(db,`rooms/${roomCode}`),{status:'lobby',gameState:null});showScreen('roomScreen');}
+  else showScreen('roomScreen');
+};
+document.getElementById('btnBackHome').onclick=()=>{
+  document.getElementById('winnerOverlay').classList.remove('show');
+  clearSession(); showScreen('homeScreen');
+};
+
+// ─── Visibility Change Handler (BUG-035: mobile sleep/wake) ────────────────────
+document.addEventListener('visibilitychange', ()=>{
+  if (document.visibilityState === 'visible') {
+    // Page came back — recalculate timer from server timestamp
+    clearInterval(timerInterval);
+    if (gameState && gameState.status === 'playing') {
+      const currentPid = gameState.turnOrder[gameState.currentTurnIndex];
+      const isMyTurn = currentPid === myId;
+      startTimer(gameState, isMyTurn);
+      // Also re-render to sync any missed state
+      renderGame();
+    }
   } else {
-    showScreen('roomScreen');
+    // Page hidden — stop timer interval to prevent stale fires
+    clearInterval(timerInterval);
   }
-};
+});
 
-document.getElementById('btnBackHome').onclick = () => {
-  document.getElementById('winnerOverlay').classList.remove('show');
-  showScreen('homeScreen');
-};
+// ─── Init ──────────────────────────────────────────────────────────────────────
+const urlParams=new URLSearchParams(location.search);
+const urlRoom=urlParams.get('room');
+if (urlRoom) document.getElementById('roomCodeInput').value=urlRoom.toUpperCase();
 
-// ─── Init ──────────────────────────────────────────────────────────────────
-// Check URL params for room join
-const urlParams = new URLSearchParams(location.search);
-const urlRoom = urlParams.get('room');
-if (urlRoom) {
-  document.getElementById('roomCodeInput').value = urlRoom.toUpperCase();
-}
+showScreen('loadingScreen');
+tryRestoreSession().then(restored=>{ if(!restored) showScreen('homeScreen'); });
 
-// Show home screen after brief loading
-setTimeout(() => {
-  showScreen('homeScreen');
-}, 800);
 </script>
 </body>
 </html>
