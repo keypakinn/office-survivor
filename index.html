@@ -1333,9 +1333,24 @@ async function joinRoom(code, name) {
   }
   clearSession();
 
-  const players = await get(ref(db, `rooms/${code}/players`));
-  const pc = Object.keys(players.val()||{}).length;
+  const playersSnap = await get(ref(db, `rooms/${code}/players`));
+  const currentPlayers = playersSnap.val()||{};
+  const pc = Object.keys(currentPlayers).length;
   if (pc >= 20) { toast('ห้องเต็ม (สูงสุด 20 คน)','error'); return; }
+
+  // Check if same name already in room (prevent duplicate from double-tap)
+  const sameNamePlayer = Object.entries(currentPlayers).find(([,p]) => p.name === name);
+  if (sameNamePlayer) {
+    // Restore as existing player instead of creating new one
+    const [existingId, existingPlayer] = sameNamePlayer;
+    myId = existingId; myName = name; isHost = false; roomCode = code;
+    saveSession();
+    listenRoom(code);
+    document.getElementById('displayRoomCode').textContent = code;
+    showScreen('roomScreen');
+    return;
+  }
+
   myId = uid(); myName = name; isHost = false; roomCode = code;
   await set(ref(db, `rooms/${code}/players/${myId}`), { name, ready: false, host: false, order: pc });
   saveSession();
@@ -1345,6 +1360,8 @@ async function joinRoom(code, name) {
 }
 
 function listenRoom(code) {
+  // Unsubscribe any existing room listener before attaching new one
+  unsubscribers.forEach(fn=>fn()); unsubscribers = [];
   const r = ref(db, `rooms/${code}`);
   const unsub = onValue(r, snap => {
     if (!snap.exists()) { toast('ห้องถูกปิดแล้ว','error'); clearSession(); showScreen('homeScreen'); return; }
@@ -3055,16 +3072,26 @@ async function tryRestoreSession() {
 }
 
 // ─── Event Listeners ───────────────────────────────────────────────────────────
+let isJoiningRoom = false; // prevent double-tap
 document.getElementById('btnCreate').onclick=async()=>{
+  if (isJoiningRoom) return;
   const name=document.getElementById('playerName').value.trim();
-  if (!name){toast('ใส่ชื่อก่อน!','error');return;} await createRoom(name);
+  if (!name){toast('ใส่ชื่อก่อน!','error');return;}
+  isJoiningRoom = true;
+  document.getElementById('btnCreate').disabled = true;
+  try { await createRoom(name); }
+  finally { isJoiningRoom = false; document.getElementById('btnCreate').disabled = false; }
 };
 document.getElementById('btnJoin').onclick=async()=>{
+  if (isJoiningRoom) return;
   const name=document.getElementById('playerName').value.trim();
   const code=document.getElementById('roomCodeInput').value.trim().toUpperCase();
   if (!name){toast('ใส่ชื่อก่อน!','error');return;}
   if (code.length!==4){toast('รหัสห้องต้อง 4 ตัว!','error');return;}
-  await joinRoom(code,name);
+  isJoiningRoom = true;
+  document.getElementById('btnJoin').disabled = true;
+  try { await joinRoom(code,name); }
+  finally { isJoiningRoom = false; document.getElementById('btnJoin').disabled = false; }
 };
 document.getElementById('playerName').addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('btnCreate').click();});
 document.getElementById('roomCodeInput').addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('btnJoin').click();});
