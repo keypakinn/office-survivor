@@ -1296,6 +1296,7 @@ async function saveGameState(gs) {
 
 // ─── Room / Lobby ─────────────────────────────────────────────────────────────
 async function createRoom(name) {
+  clearSession(); // Clear any stale session before creating new room
   myId = uid(); myName = name; isHost = true;
   // BUG-056: check for collision before creating room
   let attempts = 0;
@@ -1320,7 +1321,19 @@ async function joinRoom(code, name) {
   if (!snap.exists()) { toast('ไม่พบห้องนี้ 😢','error'); return; }
   const room = snap.val();
   if (room.status !== 'lobby') { toast('เกมเริ่มแล้ว ไม่สามารถเข้าได้','error'); return; }
-  const pc = Object.keys(room.players||{}).length;
+
+  // Remove stale session player if exists in this room
+  const oldSession = loadSession();
+  if (oldSession?.myId && oldSession.roomCode === code) {
+    const oldPlayers = room.players || {};
+    if (oldPlayers[oldSession.myId]) {
+      await remove(ref(db, `rooms/${code}/players/${oldSession.myId}`));
+    }
+  }
+  clearSession();
+
+  const players = await get(ref(db, `rooms/${code}/players`));
+  const pc = Object.keys(players.val()||{}).length;
   if (pc >= 20) { toast('ห้องเต็ม (สูงสุด 20 คน)','error'); return; }
   myId = uid(); myName = name; isHost = false; roomCode = code;
   await set(ref(db, `rooms/${code}/players/${myId}`), { name, ready: false, host: false, order: pc });
@@ -3020,6 +3033,12 @@ async function tryRestoreSession() {
         startHostMonitor(); // FIX4: restart monitor on reconnect
         return true;
       } else if (room.status==='lobby') {
+        // Verify myId still exists in this room (not kicked/expired)
+        const players = room.players || {};
+        if (!players[myId]) {
+          // myId not in room — session is stale, don't restore
+          clearSession(); return false;
+        }
         listenRoom(roomCode);
         showScreen('roomScreen');
         return true;
