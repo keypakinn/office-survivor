@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-store">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Office Survivor 🏢</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Kanit:wght@400;600;700;900&display=swap');
@@ -1338,18 +1340,16 @@ async function joinRoom(code, name) {
   const pc = Object.keys(currentPlayers).length;
   if (pc >= 20) { toast('ห้องเต็ม (สูงสุด 20 คน)','error'); return; }
 
-  // Check if same name already in room (prevent duplicate from double-tap)
-  const sameNamePlayer = Object.entries(currentPlayers).find(([,p]) => p.name === name);
-  if (sameNamePlayer) {
-    // Restore as existing player instead of creating new one
-    const [existingId, existingPlayer] = sameNamePlayer;
-    myId = existingId; myName = name; isHost = false; roomCode = code;
-    saveSession();
-    listenRoom(code);
-    document.getElementById('displayRoomCode').textContent = code;
-    showScreen('roomScreen');
-    return;
+  // Kick ALL existing players with same name — latest session wins
+  const sameNamePlayers = Object.entries(currentPlayers).filter(([,p]) => p.name === name);
+  for (const [dupId] of sameNamePlayers) {
+    await remove(ref(db, `rooms/${code}/players/${dupId}`));
   }
+
+  // Re-fetch accurate player count after cleanup
+  const freshSnap = await get(ref(db, `rooms/${code}/players`));
+  const freshPc = Object.keys(freshSnap.val()||{}).length;
+  if (freshPc >= 20) { toast('ห้องเต็ม (สูงสุด 20 คน)','error'); return; }
 
   myId = uid(); myName = name; isHost = false; roomCode = code;
   await set(ref(db, `rooms/${code}/players/${myId}`), { name, ready: false, host: false, order: pc });
@@ -3056,10 +3056,14 @@ async function tryRestoreSession() {
         startHostMonitor(); // FIX4: restart monitor on reconnect
         return true;
       } else if (room.status==='lobby') {
-        // Verify myId still exists in this room (not kicked/expired)
         const players = room.players || {};
         if (!players[myId]) {
-          // myId not in room — session is stale, don't restore
+          // myId not in room — check if same name exists (LINE browser rejoin)
+          const sameNameEntry = Object.entries(players).find(([,p]) => p.name === myName);
+          if (sameNameEntry) {
+            // Kick old entry, restore with saved myId won't work — clear and rejoin
+            await remove(ref(db, `rooms/${roomCode}/players/${sameNameEntry[0]}`));
+          }
           clearSession(); return false;
         }
         listenRoom(roomCode);
@@ -3268,6 +3272,14 @@ async function hostAutoAdvance(gs, pid) {
   await saveGameState(newGs);
 }
 
+// ─── Back-Forward Cache Prevention (iOS Safari/Chrome bfcache) ──────────────────
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) {
+    // Page restored from bfcache — reload to prevent stale session issues
+    window.location.reload();
+  }
+});
+
 // ─── Visibility Change Handler (BUG-035: mobile sleep/wake) ────────────────────
 document.addEventListener('visibilitychange', ()=>{
   if (document.visibilityState === 'visible') {
@@ -3288,8 +3300,22 @@ document.addEventListener('visibilitychange', ()=>{
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
 const urlParams=new URLSearchParams(location.search);
-const urlRoom=urlParams.get('room');
-if (urlRoom) document.getElementById('roomCodeInput').value=urlRoom.toUpperCase();
+const urlRoom=urlParams.get('room')?.toUpperCase();
+
+// If URL has ?room=XXXX and it differs from session room → clear stale session
+if (urlRoom) {
+  document.getElementById('roomCodeInput').value = urlRoom;
+  const existingSession = loadSession();
+  if (existingSession && existingSession.roomCode !== urlRoom) {
+    // Different room in URL — clear old session, don't restore
+    // Also remove old player from Firebase
+    if (existingSession.myId && existingSession.roomCode) {
+      remove(ref(db, `rooms/${existingSession.roomCode}/players/${existingSession.myId}`))
+        .catch(()=>{});
+    }
+    clearSession();
+  }
+}
 
 showScreen('loadingScreen');
 tryRestoreSession().then(restored=>{ if(!restored) showScreen('homeScreen'); });
