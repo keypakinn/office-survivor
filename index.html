@@ -775,6 +775,7 @@
     <div class="header-indicators">
       <div class="indicator direction" id="directionIndicator">→</div>
       <div class="indicator attack" id="attackIndicator" style="display:none">⚡ x<span id="attackDebtNum">0</span></div>
+      <button id="btnMuteToggle" style="background:none;border:none;font-size:1.2rem;cursor:pointer;padding:4px 6px;border-radius:8px;color:var(--text2);" title="เปิด/ปิดเสียง">🔊</button>
     </div>
   </div>
 
@@ -998,6 +999,149 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, update, remove, serverTimestamp, off }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+
+// ─── Sound Effects — Web Audio API Procedural ───────────────────────────────
+const SFX = (() => {
+  let ctx = null;
+  let enabled = true;
+
+  function getCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function play(type) {
+    if (!enabled) return;
+    try {
+      const ac = getCtx();
+      const now = ac.currentTime;
+      switch(type) {
+        case 'card_tap': {
+          // Short click
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.frequency.setValueAtTime(600, now);
+          o.frequency.exponentialRampToValueAtTime(300, now+0.08);
+          g.gain.setValueAtTime(0.15, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now+0.08);
+          o.start(now); o.stop(now+0.08);
+          break;
+        }
+        case 'card_play': {
+          // Whoosh
+          const buf = ac.createBuffer(1, ac.sampleRate*0.15, ac.sampleRate);
+          const d = buf.getChannelData(0);
+          for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2)*0.3;
+          const src = ac.createBufferSource(); src.buffer = buf;
+          const f = ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1500;
+          src.connect(f); f.connect(ac.destination);
+          src.start(now);
+          break;
+        }
+        case 'draw': {
+          // Card flip
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(400, now);
+          o.frequency.exponentialRampToValueAtTime(800, now+0.05);
+          g.gain.setValueAtTime(0.1, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now+0.12);
+          o.start(now); o.stop(now+0.12);
+          break;
+        }
+        case 'bomb': {
+          // Explosion
+          const buf = ac.createBuffer(1, ac.sampleRate*0.5, ac.sampleRate);
+          const d = buf.getChannelData(0);
+          for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5)*0.5;
+          const src = ac.createBufferSource(); src.buffer=buf;
+          const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=300;
+          const g = ac.createGain(); g.gain.setValueAtTime(1,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.5);
+          src.connect(f); f.connect(g); g.connect(ac.destination);
+          src.start(now);
+          break;
+        }
+        case 'defuse': {
+          // Success ding
+          [523,659,784].forEach((freq,i) => {
+            const o = ac.createOscillator(); const g = ac.createGain();
+            o.connect(g); g.connect(ac.destination);
+            o.frequency.value = freq;
+            const t = now + i*0.1;
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.12, t+0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+            o.start(t); o.stop(t+0.3);
+          });
+          break;
+        }
+        case 'eliminate': {
+          // Descending fail
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.frequency.setValueAtTime(400, now);
+          o.frequency.exponentialRampToValueAtTime(80, now+0.6);
+          g.gain.setValueAtTime(0.2, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now+0.6);
+          o.start(now); o.stop(now+0.6);
+          break;
+        }
+        case 'win': {
+          // Victory fanfare
+          [523,659,784,1047].forEach((freq,i) => {
+            const o = ac.createOscillator(); const g = ac.createGain();
+            o.connect(g); g.connect(ac.destination);
+            o.frequency.value = freq;
+            const t = now + i*0.15;
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.15, t+0.05);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+            o.start(t); o.stop(t+0.5);
+          });
+          break;
+        }
+        case 'combo': {
+          // Power-up
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(200, now);
+          o.frequency.exponentialRampToValueAtTime(600, now+0.2);
+          g.gain.setValueAtTime(0.1, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now+0.2);
+          o.start(now); o.stop(now+0.2);
+          break;
+        }
+        case 'timer_warn': {
+          // Tick
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.frequency.value = 880;
+          g.gain.setValueAtTime(0.08, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now+0.05);
+          o.start(now); o.stop(now+0.05);
+          break;
+        }
+        case 'nepo': {
+          // Sneaky blip
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(800, now);
+          o.frequency.setValueAtTime(400, now+0.1);
+          g.gain.setValueAtTime(0.12, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now+0.2);
+          o.start(now); o.stop(now+0.2);
+          break;
+        }
+      }
+    } catch(e) {}
+  }
+
+  return { play, toggle: ()=>{ enabled=!enabled; return enabled; }, isEnabled: ()=>enabled };
+})();
 
 // ─── Firebase ────────────────────────────────────────────────────────────────
 // BUG-048: Firebase Security Rules should be set in Firebase Console:
@@ -1432,16 +1576,13 @@ function renderMyHand(gs, isMyTurn) {
     const div = document.createElement('div');
     div.className = `hand-card ${isSelected?(isComboCard?'combo-selected':'selected'):''} ${disabled?'disabled':''}`;
     div.innerHTML = cardThumb(card.id);
-    // Single tap: combo resources select directly, others show preview
+    // Single tap: all cards show preview
+    // Combo resources have "เพิ่มเข้า Combo" button in preview
     div.addEventListener('click', (e)=>{
       e.stopPropagation();
-      if (!disabled && COMBO_RESOURCES.includes(card.id)) {
-        // Combo resource: toggle selection directly
-        toggleSelect(card.uid);
-        renderMyHand(gameState, isMyTurn);
-        updateActionButtons(gameState, isMyTurn);
+      if (COMBO_RESOURCES.includes(card.id)) {
+        showComboResourcePreview(card, !disabled && isMyTurn);
       } else {
-        // All other cards: show preview
         showCardPreview(card, !disabled && isMyTurn);
       }
     });
@@ -1450,10 +1591,196 @@ function renderMyHand(gs, isMyTurn) {
 }
 
 function showCardDetail(card) {
-  showCardPreview(card, gameState?.turnOrder[gameState?.currentTurnIndex]===myId);
+  if (COMBO_RESOURCES.includes(card.id)) {
+    showComboResourcePreview(card, gameState?.turnOrder[gameState?.currentTurnIndex]===myId);
+  } else {
+    showCardPreview(card, gameState?.turnOrder[gameState?.currentTurnIndex]===myId);
+  }
+}
+
+// ─── Combo Resource Preview ───────────────────────────────────────────────────
+let comboSlots = []; // selected combo resource uids
+
+function showComboResourcePreview(card, isMyTurn) {
+  const c = CARDS[card.id]; if (!c) return;
+  document.getElementById('cardPreviewOverlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cardPreviewOverlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:2000;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);
+    animation:fadeIn 0.15s ease;
+  `;
+
+  const img = document.createElement('div');
+  img.style.cssText = `
+    width:min(70vw,280px);aspect-ratio:5/7;
+    border-radius:20px;overflow:hidden;
+    box-shadow:0 16px 48px rgba(0,0,0,0.6);
+    border:3px solid rgba(245,166,35,0.4);
+    margin-bottom:16px;
+  `;
+  img.innerHTML = cardThumb(card.id, 280);
+  overlay.appendChild(img);
+
+  const name = document.createElement('div');
+  name.style.cssText = 'font-family:Kanit,sans-serif;font-size:1.1rem;font-weight:700;color:var(--accent2);margin-bottom:8px;';
+  name.textContent = `${c.emoji} ${c.name} — Combo Resource`;
+  overlay.appendChild(name);
+
+  const desc = document.createElement('div');
+  desc.style.cssText = 'font-size:0.8rem;color:var(--text2);margin-bottom:20px;text-align:center;';
+  desc.textContent = 'ใช้สร้าง Combo เท่านั้น — กด "เพิ่มเข้า Combo" เพื่อเลือก';
+  overlay.appendChild(desc);
+
+  if (isMyTurn) {
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-accent';
+    addBtn.style.cssText = 'max-width:220px;font-size:1rem;margin-bottom:10px;';
+    addBtn.textContent = '✨ เพิ่มเข้า Combo';
+    addBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      overlay.remove();
+      showComboBuilder(card);
+    });
+    overlay.appendChild(addBtn);
+  }
+
+  overlay.addEventListener('click', ()=>overlay.remove());
+  img.addEventListener('click', e=>e.stopPropagation());
+  document.body.appendChild(overlay);
+
+  if (!document.getElementById('previewStyle')) {
+    const s=document.createElement('style');
+    s.id='previewStyle';
+    s.textContent='@keyframes fadeIn{from{opacity:0}to{opacity:1}}';
+    document.head.appendChild(s);
+  }
+}
+
+function showComboBuilder(triggerCard) {
+  // Get all combo resources in hand
+  const hand = gameState?.players[myId]?.hand || [];
+  const comboInHand = hand.filter(c => COMBO_RESOURCES.includes(c.id));
+  if (comboInHand.length < 2) { toast('ต้องมี Combo Resource อย่างน้อย 2 ใบ!','error'); return; }
+
+  document.getElementById('comboBuilderOverlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'comboBuilderOverlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:2001;
+    display:flex;align-items:flex-end;justify-content:center;
+    background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);
+  `;
+
+  const max = Math.min(5, comboInHand.length);
+  let selectedUids = new Set([triggerCard.uid]);
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background:var(--surface);border-radius:24px 24px 0 0;
+    padding:24px 20px 40px;width:100%;max-width:480px;
+    border:1px solid var(--border);
+  `;
+
+  function renderModal() {
+    const sel = [...selectedUids];
+    const n = sel.length;
+    const canCombo = n >= 2;
+    modal.innerHTML = `
+      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;"></div>
+      <div style="font-family:Kanit,sans-serif;font-size:1.3rem;font-weight:700;text-align:center;margin-bottom:6px;">
+        ✨ สร้าง Combo
+      </div>
+      <div style="font-size:0.8rem;color:var(--text2);text-align:center;margin-bottom:16px;">
+        เลือก Combo Resource ${n}/5 ใบ ${n>=2?'('+getComboName(n)+')':''}
+      </div>
+      <div id="comboCardGrid" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;overflow-x:auto;padding:4px;"></div>
+      <div style="background:var(--surface2);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:0.8rem;min-height:40px;" id="comboEffectPreview">
+        ${n>=2 ? getComboEffect(n, [...selectedUids].every(uid=>{ const c=comboInHand.find(c=>c.uid===uid); return c&&c.id===comboInHand[0].id; })) : '<span style="color:var(--text2)">เลือกอย่างน้อย 2 ใบ</span>'}
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" style="flex:1;max-width:none" id="comboCancelBtn">ยกเลิก</button>
+        <button class="btn btn-accent" style="flex:2;max-width:none" id="comboConfirmBtn" ${!canCombo?'disabled':''}>
+          ✨ Combo ${n} ${canCombo?'→':''} ยืนยัน
+        </button>
+      </div>
+    `;
+
+    // Render card grid
+    const grid = modal.querySelector('#comboCardGrid');
+    comboInHand.forEach(card => {
+      const cd = CARDS[card.id];
+      const isSel = selectedUids.has(card.uid);
+      const div = document.createElement('div');
+      div.style.cssText = `
+        width:72px;height:100px;border-radius:10px;overflow:hidden;
+        border:3px solid ${isSel?'var(--accent2)':'var(--border)'};
+        cursor:pointer;position:relative;flex-shrink:0;
+        box-shadow:${isSel?'0 0 16px rgba(245,166,35,0.5)':'none'};
+        transition:border-color 0.15s,box-shadow 0.15s;
+      `;
+      div.innerHTML = cardThumb(card.id, 72);
+      if (isSel) {
+        const badge = document.createElement('div');
+        badge.style.cssText = `
+          position:absolute;top:-6px;right:-6px;
+          width:20px;height:20px;border-radius:50%;
+          background:var(--accent2);color:#1a1a1a;
+          font-size:0.7rem;font-weight:900;
+          display:flex;align-items:center;justify-content:center;
+        `;
+        badge.textContent = [...selectedUids].indexOf(card.uid)+1;
+        div.appendChild(badge);
+      }
+      div.addEventListener('click', ()=>{
+        if (isSel && card.uid !== triggerCard.uid) {
+          selectedUids.delete(card.uid);
+        } else if (!isSel && selectedUids.size < 5) {
+          selectedUids.add(card.uid);
+        }
+        renderModal();
+      });
+      grid.appendChild(div);
+    });
+
+    modal.querySelector('#comboCancelBtn').onclick = ()=>overlay.remove();
+    modal.querySelector('#comboConfirmBtn').onclick = ()=>{
+      overlay.remove();
+      // Set selectedCards and trigger executeCombo
+      selectedCards = [...selectedUids];
+      executeCombo();
+    };
+  }
+
+  function getComboName(n) {
+    return ['','','Combo 2','Combo 3','Combo 4','Combo 5'][n] || `Combo ${n}`;
+  }
+
+  function getComboEffect(n, isSameType) {
+    const effects = {
+      2: isSameType ? '⚡ Normal: ดู 2 ใบ เก็บ 1<br>🔒 Special (ชนิดเดียวกัน): Counter ยกเลิก Effect ศัตรู'
+                    : '🎴 Normal: ดู 2 ใบ เก็บ 1<br><span style="color:var(--text2)">Special: ต้องชนิดเดียวกัน</span>',
+      3: isSameType ? '🎲 Normal: สุ่มขโมย 1 ใบ<br>📢 Special (ชนิดเดียวกัน): เรียกชื่อการ์ด'
+                    : '🎲 Normal: สุ่มขโมย 1 ใบ<br><span style="color:var(--text2)">Special: ต้องชนิดเดียวกัน</span>',
+      4: isSameType ? '👁️ Normal: ดูมือทั้งหมด<br>🎯 Special (ชนิดเดียวกัน): ดูมือ+ขโมย 1 ใบ'
+                    : '👁️ Normal: ดูมือทั้งหมด<br><span style="color:var(--text2)">Special: ต้องชนิดเดียวกัน</span>',
+      5: '📦 Normal: หยิบ 1 ใบจากกองทิ้ง<br>🎖️ Special (ชนิดเดียวกัน): ร้องเรียนผู้บริหาร',
+    };
+    return `<strong style="color:var(--accent2)">${getComboName(n)}</strong><br>${effects[n]||''}`;
+  }
+
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  renderModal();
 }
 
 function showCardPreview(card, isMyTurn) {
+  SFX.play('card_tap');
   const c = CARDS[card.id]; if (!c) return;
 
   // Remove existing preview if any
@@ -1599,6 +1926,7 @@ function startTimer(gs, isMyTurn) {
     const remaining = Math.max(0, 30 - Math.floor((Date.now()-(gs.turnStartTime||Date.now()))/1000));
     circle.textContent = remaining;
     circle.style.setProperty('--pct', remaining/30);
+    if (remaining<=10 && remaining>0 && isMyTurn) SFX.play('timer_warn');
     if (remaining===0 && isMyTurn && !isDrawing && !pendingDefuse) {
       clearInterval(timerInterval); autoDrawCard();
     }
@@ -1672,11 +2000,13 @@ async function _drawOnce() {
     if (gs.pendingAction?.type==='WHITE_ENVELOPE_IN_DECK_FOR' && gs.pendingAction.targetId===myId) {
       gs.pendingAction = null;
     }
+    SFX.play('bomb');
     pendingDefuse = { gs, drawn };
     showDefuseModal(hasDefuse, hasNepo, hasCombo5);
   } else {
     gs.players[myId].hand = [...(gs.players[myId].hand||[]), drawn];
-    gs.lastAction = `<span class="highlight">${myName}</span> จั่วการ์ด`;
+    SFX.play('draw');
+  gs.lastAction = `<span class="highlight">${myName}</span> จั่วการ์ด`;
     // BUG-002 + BUG-031 + BUG-054: attackDebt handling — reduce debt, reset chain when done
     if (gs.attackDebt>0) {
       gs.attackDebt = Math.max(0, gs.attackDebt - 1);
@@ -1741,7 +2071,8 @@ async function useDefuse(type) {
     const hand = gs.players[myId].hand;
     const idx = hand.findIndex(c=>c.id==='labor-lawsuit');
     if (idx>=0) gs.discard.push(hand.splice(idx,1)[0]);
-    gs.lastAction = `<span class="highlight">${myName}</span> ใช้ ⚖️ ฟ้องกรมแรงงาน!`;
+    SFX.play('defuse');
+  gs.lastAction = `<span class="highlight">${myName}</span> ใช้ ⚖️ ฟ้องกรมแรงงาน!`;
   } else if (type==='combo5-special') {
     const hand = gs.players[myId].hand;
     let removed=0;
@@ -1826,9 +2157,10 @@ function startNepoFlow() {
   closeModal('defuseModal');
   if (!pendingDefuse) return;
   const gs = pendingDefuse.gs;
-  // BUG-005 fix: filter out protected players AND eliminated
+  // BUG-060 fix: เด็กเส้นไม่ใช่ Targeted Effect — ลาป่วยป้องกันไม่ได้
+  // Only filter eliminated players, NOT protected
   const validTargets = gs.turnOrder.filter(pid=>
-    !gs.players[pid].eliminated && pid!==myId && !gs.players[pid].protected
+    !gs.players[pid].eliminated && pid!==myId
   );
   if (validTargets.length===0) {
     toast('ไม่มีเป้าหมายที่ใช้เด็กเส้นได้ (ทุกคนลาป่วยอยู่)','error');
@@ -1855,6 +2187,8 @@ async function executeNepo(targetId) {
   // Remove nepo from hand (Remove From Game — not discard)
   const hand = gs.players[myId].hand;
   const idx = hand.findIndex(c=>c.id==='nepo-baby'); if (idx>=0) hand.splice(idx,1);
+  // BUG-061: track nepo as removed from game
+  gs.removedCards = (gs.removedCards||0) + 1;
   // BUG-025 fix: insert bomb near top of deck (target will draw it next turn)
   // Then set pendingAction so target must respond when they draw it
   const insertPos = Math.max(0, gs.deck.length - 1); // 2nd from top
@@ -1864,6 +2198,7 @@ async function executeNepo(targetId) {
     targetId,
     targetName: gs.players[targetId].name,
   };
+  SFX.play('nepo');
   gs.lastAction = `<span class="highlight">${myName}</span> 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name} (จะจั่วได้ในเทิร์นหน้า!)`;
   pendingDefuse = null;
   // Flash
@@ -1887,6 +2222,7 @@ async function eliminateMe() {
   // Track removed cards count for debugging
   gs.removedCards = (gs.removedCards||0) + 1 + hand.filter(c=>c.id==='nepo-baby').length;
   gs.lastAction = `<span style="color:var(--danger)">${myName} ตกรอบ! 📄</span>`;
+  SFX.play('eliminate');
   document.getElementById('eliminatedOverlay').classList.add('show');
   // BUG-021: clear pendingAction if target was me (eliminated mid-pending)
   if (gs.pendingAction && (gs.pendingAction.to===myId || gs.pendingAction.targetId===myId)) {
@@ -1911,6 +2247,7 @@ async function playSelectedCard() {
 }
 
 async function executeCardEffect(cardObj) {
+  SFX.play('card_play');
   const gs = JSON.parse(JSON.stringify(gameState));
   const card = CARDS[cardObj.id]; if (!card) return;
   const hand = gs.players[myId].hand;
@@ -1924,8 +2261,11 @@ async function executeCardEffect(cardObj) {
     const valid = act.filter(pid=>!gs.players[pid].protected);
     if (valid.length===0) { toast('ไม่มีเป้าหมาย (ทุกคนลาป่วย)','error'); return; }
   }
-  if (card.type==='DEFUSE'||card.type==='NEPO'||card.type==='EXPLODING') {
+  if (card.type==='DEFUSE'||card.type==='EXPLODING') {
     toast('การ์ดนี้ใช้ได้เฉพาะตอนจั่วซองขาวเท่านั้น!','error'); return;
+  }
+  if (card.type==='NEPO') {
+    toast('👶 เด็กเส้น ใช้ได้เฉพาะตอนจั่วซองขาว และไม่มีฟ้องกรมแรงงาน!','error'); return;
   }
   if (card.type==='COMBO') {
     toast('Combo Resource — เลือก 2+ ใบแล้วกด Combo!','error'); return;
@@ -2075,6 +2415,7 @@ async function doReverse(gs) {
 // ─── Combo System ─────────────────────────────────────────────────────────────
 async function executeCombo() {
   if (isPlayingCard) return;
+  SFX.play('combo');
   if (!gameState || gameState.turnOrder[gameState.currentTurnIndex]!==myId) return;
   const gs = JSON.parse(JSON.stringify(gameState));
   const hand = gs.players[myId].hand||[];
@@ -2643,6 +2984,7 @@ function makeOverlay(id) {
 // ─── Win ──────────────────────────────────────────────────────────────────────
 function handleWin(activePlayers) {
   clearInterval(timerInterval);
+  SFX.play('win');
   const winnerId=activePlayers[0];
   if (!winnerId) return;
   const winnerName=gameState.players[winnerId]?.name||'?';
@@ -2737,6 +3079,11 @@ document.getElementById('btnCopyCode').onclick=()=>{
   const url=`${location.href.split('?')[0]}?room=${code}`;
   navigator.clipboard.writeText(url).then(()=>toast('คัดลอก link แล้ว! 📋','success'));
 };
+document.getElementById('btnMuteToggle').onclick=()=>{
+  const on=SFX.toggle();
+  document.getElementById('btnMuteToggle').textContent=on?'🔊':'🔇';
+  toast(on?'เปิดเสียงแล้ว 🔊':'ปิดเสียงแล้ว 🔇','info',1500);
+};
 document.getElementById('btnPlayCard').onclick=playSelectedCard;
 document.getElementById('btnCombo').onclick=executeCombo;
 document.getElementById('btnDraw').onclick=drawCard;
@@ -2767,19 +3114,22 @@ function startHostMonitor() {
   clearInterval(hostMonitorInterval);
   hostMonitorInterval = setInterval(async () => {
     if (!gameState || gameState.status !== 'playing') return;
+    if (!myId) return; // guard: myId not set yet
     const gs = gameState;
     const currentPid = gs.turnOrder[gs.currentTurnIndex];
-    // Skip if it's my turn (I handle it myself)
+    // Skip if it's my turn — I handle my own turn
     if (currentPid === myId) return;
-    // Check if turn has been stuck for > 35s
+    // Skip if current player is NOT eliminated (they're still in game)
+    // Only auto-advance if player seems disconnected (timer expired)
     const elapsed = Date.now() - (gs.turnStartTime || Date.now());
-    if (elapsed < 35000) return;
-    // Prevent double-trigger: check version hasn't changed
+    // Use 65s (30s timer + 35s grace) to avoid interfering with slow players
+    if (elapsed < 65000) return;
+    // Prevent double-trigger
     if (lastMonitoredTurnIndex === gs.currentTurnIndex &&
         lastMonitoredVersion === gs.version) return;
     lastMonitoredTurnIndex = gs.currentTurnIndex;
     lastMonitoredVersion = gs.version;
-    console.log(`[HostMonitor] Player ${gs.players[currentPid]?.name} timed out, auto-advancing`);
+    console.log(`[HostMonitor] Player ${gs.players[currentPid]?.name} timed out (65s), auto-advancing`);
     await hostAutoAdvance(gs, currentPid);
   }, 5000);
 }
