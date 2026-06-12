@@ -382,7 +382,7 @@
   .hand-card:active { transform: translateY(-12px) scale(1.04); border-color: var(--accent); box-shadow: 0 12px 24px rgba(233,69,96,0.3); }
   .hand-card.selected { transform: translateY(-16px); border-color: var(--accent3); box-shadow: 0 12px 32px rgba(0,212,170,0.4); }
   .hand-card.combo-selected { border-color: var(--accent2); transform: translateY(-8px); }
-  .hand-card.disabled { opacity: 0.5; } /* Still clickable for preview */
+  .hand-card.disabled { opacity: 0.5; pointer-events: all !important; cursor: pointer; }
   .hand-card.eliminated-card { opacity: 0.35; pointer-events: none; }
 
   .combo-count-badge {
@@ -1591,7 +1591,8 @@ function renderMyHand(gs, isMyTurn) {
     div.className = `hand-card ${isSelected?(isComboCard?'combo-selected':'selected'):''} ${disabled?'disabled':''}`;
     div.innerHTML = cardThumb(card.id);
     // Single tap: preview always works, actions only when my turn
-    div.addEventListener('click', (e)=>{
+    const handleCardTap = (e)=>{
+      e.preventDefault();
       e.stopPropagation();
       const canAct = !me.eliminated && isMyTurn;
       if (COMBO_RESOURCES.includes(card.id)) {
@@ -1599,7 +1600,9 @@ function renderMyHand(gs, isMyTurn) {
       } else {
         showCardPreview(card, canAct);
       }
-    });
+    };
+    div.addEventListener('click', handleCardTap);
+    div.addEventListener('touchend', handleCardTap, {passive:false});
     handEl.appendChild(div);
   });
 }
