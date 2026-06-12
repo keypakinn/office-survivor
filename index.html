@@ -1285,6 +1285,15 @@ function listenGameState() {
       return;
     }
     const prev = gameState;
+    // Normalize Firebase-omitted empty arrays
+    if (!newState.deck)    newState.deck    = [];
+    if (!newState.discard) newState.discard = [];
+    if (newState.players) {
+      Object.keys(newState.players).forEach(pid => {
+        if (newState.players[pid] && !newState.players[pid].hand)
+          newState.players[pid].hand = [];
+      });
+    }
     gameState = newState;
     renderGame();
     checkPendingActions(prev);
@@ -1295,6 +1304,12 @@ function listenGameState() {
 // ─── Render ───────────────────────────────────────────────────────────────────
 function renderGame() {
   const gs = gameState; if (!gs) return;
+  // Normalize Firebase-omitted empty arrays
+  if (!gs.deck)    gs.deck    = [];
+  if (!gs.discard) gs.discard = [];
+  gs.turnOrder.forEach(pid => {
+    if (gs.players[pid] && !gs.players[pid].hand) gs.players[pid].hand = [];
+  });
   const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid]?.eliminated);
   if (gs.status==='finished') {
     // BUG-057: lock all action buttons immediately
@@ -1324,12 +1339,14 @@ function renderGame() {
   // Direction
   document.getElementById('directionIndicator').textContent = gs.direction===1 ? '→ ปกติ' : '← Reverse';
 
-  // Deck/discard counts
-  document.getElementById('deckCount').textContent = `${gs.deck.length} ใบ`;
-  document.getElementById('discardCount').textContent = `${gs.discard.length} ใบ`;
+  // Deck/discard counts — Firebase omits empty arrays, so use fallback
+  const gsDeck    = gs.deck    || [];
+  const gsDiscard = gs.discard || [];
+  document.getElementById('deckCount').textContent    = `${gsDeck.length} ใบ`;
+  document.getElementById('discardCount').textContent = `${gsDiscard.length} ใบ`;
 
   // Discard top
-  const discardTop = gs.discard.length>0 ? gs.discard[gs.discard.length-1] : null;
+  const discardTop = gsDiscard.length>0 ? gsDiscard[gsDiscard.length-1] : null;
   const discardCardEl = document.getElementById('discardTopCard');
   if (discardTop) {
     discardCardEl.className = 'pile-card';
