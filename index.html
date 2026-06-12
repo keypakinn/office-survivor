@@ -341,19 +341,17 @@
   }
 
   .hand-cards {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
-    overflow-x: auto;
     padding: 8px 4px 16px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    flex-wrap: nowrap;
+    overflow-y: auto;
+    max-height: 280px;
   }
-  .hand-cards::-webkit-scrollbar { display: none; }
 
   .hand-card {
-    flex-shrink: 0;
-    width: 90px; height: 126px;
+    width: 100%; aspect-ratio: 5/7;
+    height: auto;
     border-radius: 12px;
     background: var(--card-bg);
     border: 2px solid var(--border);
@@ -405,6 +403,7 @@
     display: flex;
     gap: 8px;
     padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
     background: var(--surface);
     border-top: 1px solid var(--border);
     flex-shrink: 0;
@@ -1127,6 +1126,20 @@ const SFX = (() => {
           o.start(now); o.stop(now+0.05);
           break;
         }
+        case 'your_turn': {
+          // Upbeat two-tone
+          [[440,0],[660,0.15]].forEach(([freq,delay])=>{
+            const o=ac.createOscillator(); const g=ac.createGain();
+            o.connect(g); g.connect(ac.destination);
+            o.type='sine'; o.frequency.value=freq;
+            const t=now+delay;
+            g.gain.setValueAtTime(0,t);
+            g.gain.linearRampToValueAtTime(0.18,t+0.03);
+            g.gain.exponentialRampToValueAtTime(0.001,t+0.3);
+            o.start(t); o.stop(t+0.3);
+          });
+          break;
+        }
         case 'nepo': {
           // Sneaky blip
           const o = ac.createOscillator(); const g = ac.createGain();
@@ -1517,8 +1530,17 @@ function renderGame() {
 
   // Turn name
   const tnEl = document.getElementById('currentTurnName');
+  const wasMyTurn = tnEl.dataset.myTurn === 'true';
   tnEl.textContent = isMyTurn ? '🌟 เทิร์นของคุณ!' : `เทิร์น: ${gs.players[currentPid]?.name||'?'}`;
   tnEl.className = `turn-name ${isMyTurn?'my-turn pulse':''}`;
+  tnEl.dataset.myTurn = isMyTurn ? 'true' : 'false';
+
+  // FIX4: notify when turn just became mine
+  if (isMyTurn && !wasMyTurn) {
+    SFX.play('your_turn');
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    showYourTurnPopup();
+  }
 
   // Attack debt
   const attEl = document.getElementById('attackIndicator');
@@ -1549,7 +1571,13 @@ function renderGame() {
     discardCardEl.innerHTML = '';
   }
 
-  document.getElementById('actionLog').innerHTML = gs.lastAction||'';
+  // FIX3: detect new action and trigger card fly if applicable
+  const prevAction = document.getElementById('actionLog').innerHTML;
+  const newAction = gs.lastAction||'';
+  if (newAction !== prevAction && gs.lastPlayedCard && gs.lastPlayedFrom && gs.lastPlayedTo) {
+    playCardFlyAnimation(gs.lastPlayedCard, gs.lastPlayedFrom, gs.lastPlayedTo);
+  }
+  document.getElementById('actionLog').innerHTML = newAction;
   renderPlayersStrip(gs, currentPid);
   renderMyHand(gs, isMyTurn);
   startTimer(gs, isMyTurn);
@@ -1632,6 +1660,77 @@ function showCardDetail(card) {
   }
 }
 
+// ─── Card Fly Animation ───────────────────────────────────────────────────────
+function playCardFlyAnimation(cardId, fromPid, toPid) {
+  const c = CARDS[cardId]; if (!c) return;
+  if (!fromPid || !toPid) return;
+
+  // Get positions from player chips
+  const strips = document.getElementById('playersStrip');
+  if (!strips) return;
+  const chips = strips.querySelectorAll('.player-chip');
+  const order = gameState?.turnOrder || [];
+  const fromIdx = order.indexOf(fromPid);
+  const toIdx = order.indexOf(toPid);
+
+  const fromChip = chips[fromIdx];
+  const toChip = chips[toIdx];
+  if (!fromChip || !toChip) return;
+
+  const fromRect = fromChip.getBoundingClientRect();
+  const toRect = toChip.getBoundingClientRect();
+
+  const el = document.createElement('div');
+  el.style.cssText = `
+    position:fixed;
+    width:60px; height:84px;
+    border-radius:8px; overflow:hidden;
+    z-index:4000; pointer-events:none;
+    left:${fromRect.left + fromRect.width/2 - 30}px;
+    top:${fromRect.top + fromRect.height/2 - 42}px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.5);
+    transition:none;
+  `;
+  el.innerHTML = `<img src="${cardImg(cardId)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=font-size:2rem;text-align:center;line-height:84px>${c.emoji}</div>'">`;
+  document.body.appendChild(el);
+
+  // Animate after paint
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const dx = toRect.left + toRect.width/2 - 30 - (fromRect.left + fromRect.width/2 - 30);
+      const dy = toRect.top + toRect.height/2 - 42 - (fromRect.top + fromRect.height/2 - 42);
+      el.style.transition = 'transform 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.5s';
+      el.style.transform = `translate(${dx}px, ${dy}px) scale(0.8)`;
+      el.style.opacity = '0';
+      setTimeout(()=>el.remove(), 550);
+    });
+  });
+}
+
+// ─── Your Turn Popup ──────────────────────────────────────────────────────────
+function showYourTurnPopup() {
+  document.getElementById('yourTurnPopup')?.remove();
+  const el = document.createElement('div');
+  el.id = 'yourTurnPopup';
+  el.style.cssText = `
+    position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    background:linear-gradient(135deg,var(--accent3),#00a884);
+    color:#000; font-family:Kanit,sans-serif; font-weight:900;
+    font-size:1.2rem; padding:12px 28px; border-radius:50px;
+    z-index:3000; white-space:nowrap; pointer-events:none;
+    box-shadow:0 8px 32px rgba(0,212,170,0.5);
+    animation:yourTurnAnim 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  `;
+  el.textContent = '🌟 เทิร์นของคุณ!';
+  document.body.appendChild(el);
+  if (!document.getElementById('yourTurnStyle')) {
+    const s=document.createElement('style'); s.id='yourTurnStyle';
+    s.textContent='@keyframes yourTurnAnim{from{opacity:0;transform:translateX(-50%) scale(0.5)}to{opacity:1;transform:translateX(-50%) scale(1)}}';
+    document.head.appendChild(s);
+  }
+  setTimeout(()=>el.remove(), 2000);
+}
+
 // ─── Combo Resource Preview ───────────────────────────────────────────────────
 let comboSlots = []; // selected combo resource uids
 
@@ -1651,7 +1750,7 @@ function showComboResourcePreview(card, isMyTurn) {
 
   const img = document.createElement('div');
   img.style.cssText = `
-    width:min(70vw,280px);aspect-ratio:5/7;
+    width:min(80vw,320px);aspect-ratio:5/7;
     border-radius:20px;overflow:hidden;
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
     border:3px solid rgba(245,166,35,0.4);
@@ -1953,9 +2052,19 @@ function toggleSelect(cardUid) {
 }
 
 // ─── Timer ────────────────────────────────────────────────────────────────────
+let targetTimerInterval = null;
+let targetTimerStart = null;
+
 function startTimer(gs, isMyTurn) {
   clearInterval(timerInterval);
   const circle = document.getElementById('timerCircle');
+  // FIX2: pause owner timer when waiting for target
+  const pa = gs.pendingAction;
+  const ownerWaiting = pa && pa.from === myId &&
+    !['COUNTER_WINDOW','WHITE_ENVELOPE_IN_DECK_FOR'].includes(pa.type);
+  if (ownerWaiting) {
+    circle.textContent = '⏸'; circle.style.setProperty('--pct', 1); return;
+  }
   const tick = ()=>{
     const remaining = Math.max(0, 30 - Math.floor((Date.now()-(gs.turnStartTime||Date.now()))/1000));
     circle.textContent = remaining;
@@ -1966,6 +2075,26 @@ function startTimer(gs, isMyTurn) {
     }
   };
   tick(); timerInterval = setInterval(tick, 500);
+}
+
+function startTargetTimer(pa) {
+  clearInterval(targetTimerInterval);
+  targetTimerStart = Date.now();
+  targetTimerInterval = setInterval(async ()=>{
+    if (!gameState?.pendingAction) { clearInterval(targetTimerInterval); return; }
+    if (Date.now() - targetTimerStart >= 30000) {
+      clearInterval(targetTimerInterval);
+      await autoResolvePending(pa);
+    }
+  }, 1000);
+}
+
+async function autoResolvePending(pa) {
+  if (!pa || !gameState) return;
+  if (pa.type==='FAVOR_REQUEST' && pa.to===myId) {
+    const hand = gameState.players[myId]?.hand||[];
+    await resolveFavor(hand.length>0 ? hand[Math.floor(Math.random()*hand.length)] : null, pa.from);
+  }
 }
 
 async function autoDrawCard() {
@@ -2108,6 +2237,7 @@ async function useDefuse(type) {
     const idx = hand.findIndex(c=>c.id==='labor-lawsuit');
     if (idx>=0) gs.discard.push(hand.splice(idx,1)[0]);
     SFX.play('defuse');
+  gs.lastPlayedCard = 'labor-lawsuit'; gs.lastPlayedFrom = myId; gs.lastPlayedTo = null;
   gs.lastAction = `<span class="highlight">${myName}</span> ใช้ ⚖️ ฟ้องกรมแรงงาน!`;
   } else if (type==='combo5-special') {
     const hand = gs.players[myId].hand;
@@ -2345,6 +2475,7 @@ async function doAttack(gs) {
   gs.attackDebt = (gs.attackDebt||0) + 2;
 
   const chainNow = gs.attackChainCount;
+  gs.lastPlayedCard='throw-work'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=gs.turnOrder[nextIdx];
   gs.lastAction = `<span class="highlight">${myName}</span> 📋 โยนงาน! Chain ${chainNow}/3 (+2 รวม ${gs.attackDebt} จั่ว)`;
 
   // Advance to next player
@@ -2810,12 +2941,27 @@ function checkPendingActions(prevState) {
     const hand=gameState.players[myId].hand||[];
     if (hand.length===0) { resolveFavor(null, pa.from); return; }
     showFavorResponse(pa.from, pa.fromName, hand);
+    startTargetTimer(pa); // FIX2
   }
 
   // WHITE_ENVELOPE_IN_DECK — warn target that nepo sent bomb their way
   if (pa.type==='WHITE_ENVELOPE_IN_DECK_FOR' && pa.targetId===myId) {
     toast(`👶 เด็กเส้น! ซองขาวอยู่บนกองไพ่ของคุณแล้ว! เตรียมฟ้องกรมแรงงาน!`, 'error', 4000);
     return;
+  }
+
+  // FIX1: WHITE_ENVELOPE_IN_HAND — nepo delivered bomb directly, show defuse modal
+  if (pa.type==='WHITE_ENVELOPE_IN_HAND' && pa.targetId===myId && !pendingDefuse) {
+    const hand = gameState.players[myId]?.hand||[];
+    const hasDefuse = hand.some(c=>c.id==='labor-lawsuit');
+    const hasNepo   = hand.some(c=>c.id==='nepo-baby');
+    const hasCombo5 = !gameState.comboRightsUsed && hand.filter(c=>['green-tea','bubble-tea','cocoa'].includes(c.id)).length>=5;
+    // Create fake pendingDefuse so defuse modal works
+    const gs = JSON.parse(JSON.stringify(gameState));
+    gs.pendingAction = null;
+    pendingDefuse = { gs, drawn: pa.bomb };
+    showDefuseModal(hasDefuse, hasNepo, hasCombo5);
+    startTargetTimer(pa); // 30s auto-resolve
   }
 
   // RESOLVE after counter passed — only the original attacker resolves
