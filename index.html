@@ -1040,6 +1040,23 @@ const CARDS = {
   'cocoa':          { id:'cocoa',          name:'โกโก้ปั่น',        emoji:'🍫', type:'COMBO',     effect:'Combo Resource — ใช้สร้าง Combo เท่านั้น ไม่มี Effect เดี่ยว',     file:'cocoa.png'          },
 };
 const COMBO_RESOURCES = ['green-tea','bubble-tea','cocoa'];
+const HAND_SORT_ORDER = {
+  'nepo-baby':      1,
+  'labor-lawsuit':  2,
+  'throw-work':     3,
+  'work-swap':      4,
+  'fortune-teller': 5,
+  'hr-restructure': 6,
+  'sick-leave':     7,
+  'bubble-tea':     8,
+  'green-tea':      9,
+  'cocoa':          10,
+  'white-envelope': 99,
+};
+function sortHand(hand) {
+  return [...hand].sort((a,b)=>(HAND_SORT_ORDER[a.id]||50)-(HAND_SORT_ORDER[b.id]||50));
+}
+
 const _repo = location.pathname.split('/').filter(Boolean)[0] || 'office-survivor';
 const ASSET_PATH = location.hostname.includes('github.io') ? `/${_repo}/assets/cards/` : './assets/cards/';
 
@@ -1271,6 +1288,7 @@ function startGame() {
   unsubscribers.forEach(fn=>fn()); unsubscribers = [];
   showScreen('gameScreen');
   listenGameState();
+  startHostMonitor(); // FIX4
 }
 
 function listenGameState() {
@@ -1400,7 +1418,7 @@ function renderPlayersStrip(gs, currentPid) {
 
 function renderMyHand(gs, isMyTurn) {
   const me = gs.players[myId]; if (!me) return;
-  const hand = me.hand||[];
+  const hand = sortHand(me.hand||[]);
   const handEl = document.getElementById('myHandCards');
   document.getElementById('myHandCount').textContent = hand.length;
   handEl.innerHTML = '';
@@ -1414,29 +1432,85 @@ function renderMyHand(gs, isMyTurn) {
     const div = document.createElement('div');
     div.className = `hand-card ${isSelected?(isComboCard?'combo-selected':'selected'):''} ${disabled?'disabled':''}`;
     div.innerHTML = cardThumb(card.id);
-    if (!disabled) div.addEventListener('click', ()=>onCardClick(card, isMyTurn));
-    // Long press → detail
-    let pressTimer;
-    div.addEventListener('touchstart', ()=>{ pressTimer=setTimeout(()=>showCardDetail(card),500); },{passive:true});
-    div.addEventListener('touchend', ()=>clearTimeout(pressTimer));
-    div.addEventListener('mousedown', ()=>{ pressTimer=setTimeout(()=>showCardDetail(card),600); });
-    div.addEventListener('mouseup', ()=>clearTimeout(pressTimer));
+    // Single tap: combo resources select directly, others show preview
+    div.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if (!disabled && COMBO_RESOURCES.includes(card.id)) {
+        // Combo resource: toggle selection directly
+        toggleSelect(card.uid);
+        renderMyHand(gameState, isMyTurn);
+        updateActionButtons(gameState, isMyTurn);
+      } else {
+        // All other cards: show preview
+        showCardPreview(card, !disabled && isMyTurn);
+      }
+    });
     handEl.appendChild(div);
   });
 }
 
 function showCardDetail(card) {
+  showCardPreview(card, gameState?.turnOrder[gameState?.currentTurnIndex]===myId);
+}
+
+function showCardPreview(card, isMyTurn) {
   const c = CARDS[card.id]; if (!c) return;
-  const preview = document.getElementById('cardDetailPreview');
-  preview.innerHTML = cardThumb(card.id, 140);
-  preview.className = 'card-preview-big';
-  document.getElementById('cardDetailName').textContent = `${c.emoji} ${c.name}`;
-  document.getElementById('cardDetailEffect').innerHTML = c.effect;
-  const playBtn = document.getElementById('btnCardDetailPlay');
-  const isMyTurn = gameState?.turnOrder[gameState?.currentTurnIndex]===myId;
-  playBtn.style.display = isMyTurn?'block':'none';
-  playBtn.onclick = ()=>{ closeModal('cardDetailModal'); onCardClick(card, isMyTurn); };
-  openModal('cardDetailModal');
+
+  // Remove existing preview if any
+  document.getElementById('cardPreviewOverlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cardPreviewOverlay';
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:2000;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.85);
+    backdrop-filter:blur(6px);
+    animation:fadeIn 0.15s ease;
+  `;
+
+  const img = document.createElement('div');
+  img.style.cssText = `
+    width:min(70vw,280px); aspect-ratio:5/7;
+    border-radius:20px; overflow:hidden;
+    box-shadow:0 16px 48px rgba(0,0,0,0.6);
+    border:3px solid rgba(255,255,255,0.15);
+    margin-bottom:24px;
+  `;
+  img.innerHTML = cardThumb(card.id, 280);
+
+  overlay.appendChild(img);
+
+  if (isMyTurn && !gameState?.players[myId]?.eliminated) {
+    const playBtn = document.createElement('button');
+    playBtn.className = 'btn btn-primary';
+    playBtn.style.cssText = 'max-width:200px; font-size:1.1rem;';
+    playBtn.textContent = '🃏 เล่นการ์ดนี้';
+    playBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      overlay.remove();
+      // Select this card and play it
+      selectedCards = [card.uid];
+      renderMyHand(gameState, true);
+      playSelectedCard();
+    });
+    overlay.appendChild(playBtn);
+  }
+
+  // Tap anywhere outside card/button → close
+  overlay.addEventListener('click', ()=>overlay.remove());
+  img.addEventListener('click', (e)=>e.stopPropagation());
+
+  document.body.appendChild(overlay);
+
+  // Add fadeIn keyframe if not exists
+  if (!document.getElementById('previewStyle')) {
+    const s = document.createElement('style');
+    s.id = 'previewStyle';
+    s.textContent = '@keyframes fadeIn{from{opacity:0}to{opacity:1}}';
+    document.head.appendChild(s);
+  }
 }
 
 function updateActionButtons(gs, isMyTurn) {
@@ -1450,7 +1524,9 @@ function updateActionButtons(gs, isMyTurn) {
   const blocksMe = pa && (
     pa.type === 'FAVOR_REQUEST' && pa.to === myId
   );
-  const blocksTurn = pa && pa.type !== 'COUNTER_WINDOW';
+  // WHITE_ENVELOPE_IN_DECK_FOR: nepo target must be able to draw
+  const isNepoForMe = pa?.type==='WHITE_ENVELOPE_IN_DECK_FOR' && pa?.targetId===myId;
+  const blocksTurn = pa && pa.type !== 'COUNTER_WINDOW' && !isNepoForMe;
 
   if (isElim) {
     // BUG-028: eliminated = spectator mode, disable all actions but keep UI visible
@@ -1544,7 +1620,11 @@ async function drawCard() {
   const gs = gameState;
   if (gs.turnOrder[gs.currentTurnIndex]!==myId) return;
   if (gs.players[myId]?.eliminated) return;
-  if (gs.pendingAction) return;
+  // Allow draw if pendingAction is WHITE_ENVELOPE_IN_DECK_FOR targeting me
+  // (nepo sent bomb to my deck — I need to draw it)
+  const pa = gs.pendingAction;
+  const isNepoTarget = pa?.type==='WHITE_ENVELOPE_IN_DECK_FOR' && pa?.targetId===myId;
+  if (pa && !isNepoTarget) return;
 
   isDrawing = true;
   try {
@@ -1677,25 +1757,47 @@ async function useDefuse(type) {
 
 function showInsertModal(deckSize) {
   const container = document.getElementById('insertPositions');
-  container.innerHTML = `<div class="insert-label">วางซองขาวที่ตำแหน่งไหน?</div><div class="insert-positions" id="insertPosButtons"></div>`;
-  const btns = document.getElementById('insertPosButtons');
-  const total = deckSize+1;
-  const positions = [];
-  positions.push({ label:'บนสุด (ใบถัดไป)', idx: deckSize });
-  if (total>2) {
-    const steps = Math.min(6, total-2);
-    for(let i=1;i<=steps;i++) {
-      const idx = Math.round((deckSize/steps)*i);
-      if (idx>0 && idx<deckSize) positions.push({ label:`ตำแหน่งที่ ${idx}`, idx });
-    }
+  const total = deckSize + 1; // 1=top, total=bottom
+  container.innerHTML = `
+    <div class="insert-label" style="text-align:center;margin-bottom:8px;">
+      วางซองขาวที่ตำแหน่งไหน?
+    </div>
+    <div style="padding:0 8px;">
+      <input type="range" id="insertSlider" min="1" max="${total}"
+        value="${Math.ceil(total/2)}"
+        style="width:100%;accent-color:var(--accent);height:6px;cursor:pointer;">
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text2);margin-top:4px;padding:0 8px;">
+      <span>บนสุด (ใบถัดไป)</span><span>ล่างสุด</span>
+    </div>
+    <div style="text-align:center;margin:16px 0 8px;">
+      <span style="font-family:'Kanit',sans-serif;font-size:1.4rem;font-weight:700;color:var(--accent)" id="insertPosLabel">-</span>
+      <div style="font-size:0.75rem;color:var(--text2)" id="insertPosDesc"></div>
+    </div>
+    <button class="btn btn-primary" style="max-width:none" id="insertConfirmBtn">📌 วางที่ตำแหน่งนี้</button>
+  `;
+
+  const slider  = container.querySelector('#insertSlider');
+  const label   = container.querySelector('#insertPosLabel');
+  const desc    = container.querySelector('#insertPosDesc');
+  const confirm = container.querySelector('#insertConfirmBtn');
+
+  function updateLabel() {
+    const v = parseInt(slider.value);
+    if (v === 1)     { label.textContent = 'บนสุด'; desc.textContent = 'ใบถัดไปที่จะจั่ว'; }
+    else if (v===total){ label.textContent = 'ล่างสุด'; desc.textContent = 'ใบสุดท้ายในกอง'; }
+    else             { label.textContent = `ตำแหน่งที่ ${v}`; desc.textContent = `จากบนสุด ${v} ใบ`; }
   }
-  positions.push({ label:'ล่างสุด (สุ่ม)', idx: Math.floor(Math.random()*(deckSize+1)) });
-  positions.forEach(p=>{
-    const btn = document.createElement('button');
-    btn.className='insert-pos-btn'; btn.textContent=p.label;
-    btn.onclick=()=>{ closeModal('insertModal'); insertDefuse(p.idx); };
-    btns.appendChild(btn);
-  });
+  updateLabel();
+  slider.addEventListener('input', updateLabel);
+
+  confirm.onclick = () => {
+    closeModal('insertModal');
+    const v = parseInt(slider.value);
+    // v=1 → top of deck (last in array), v=total → bottom (index 0)
+    const insertIdx = total - v;
+    insertDefuse(insertIdx);
+  };
   openModal('insertModal');
 }
 
@@ -2570,9 +2672,10 @@ async function tryRestoreSession() {
       document.getElementById('displayRoomCode').textContent=roomCode;
       if (room.status==='playing' && room.gameState) {
         gameState=room.gameState;
-        listenRoom(roomCode);      // BUG-024: always attach room listener for closure detection
+        listenRoom(roomCode);
         listenGameState();
         showScreen('gameScreen');
+        startHostMonitor(); // FIX4: restart monitor on reconnect
         return true;
       } else if (room.status==='lobby') {
         listenRoom(roomCode);
@@ -2653,6 +2756,115 @@ document.getElementById('btnBackHome').onclick=()=>{
   document.getElementById('winnerOverlay').classList.remove('show');
   clearSession(); showScreen('homeScreen');
 };
+
+// ─── Host Monitor — auto-advance turn if player disconnects ─────────────────────
+let hostMonitorInterval = null;
+let lastMonitoredTurnIndex = null;
+let lastMonitoredVersion = null;
+
+function startHostMonitor() {
+  if (!isHost) return;
+  clearInterval(hostMonitorInterval);
+  hostMonitorInterval = setInterval(async () => {
+    if (!gameState || gameState.status !== 'playing') return;
+    const gs = gameState;
+    const currentPid = gs.turnOrder[gs.currentTurnIndex];
+    // Skip if it's my turn (I handle it myself)
+    if (currentPid === myId) return;
+    // Check if turn has been stuck for > 35s
+    const elapsed = Date.now() - (gs.turnStartTime || Date.now());
+    if (elapsed < 35000) return;
+    // Prevent double-trigger: check version hasn't changed
+    if (lastMonitoredTurnIndex === gs.currentTurnIndex &&
+        lastMonitoredVersion === gs.version) return;
+    lastMonitoredTurnIndex = gs.currentTurnIndex;
+    lastMonitoredVersion = gs.version;
+    console.log(`[HostMonitor] Player ${gs.players[currentPid]?.name} timed out, auto-advancing`);
+    await hostAutoAdvance(gs, currentPid);
+  }, 5000);
+}
+
+async function hostAutoAdvance(gs, pid) {
+  const newGs = JSON.parse(JSON.stringify(gs));
+  const hand = newGs.players[pid].hand || [];
+  // Handle attack debt first
+  const draws = Math.max(1, newGs.attackDebt);
+  let drewBomb = false;
+  let bombCard = null;
+  for (let i = 0; i < draws; i++) {
+    if (newGs.players[pid].eliminated) break;
+    if (!newGs.deck || newGs.deck.length === 0) {
+      // Reshuffle
+      const reshuf = (newGs.discard || []).filter(c => c.id !== 'white-envelope' && c.id !== 'nepo-baby');
+      if (reshuf.length > 0) {
+        newGs.deck = reshuf.sort(() => Math.random() - 0.5);
+        newGs.discard = (newGs.discard || []).filter(c => c.id === 'white-envelope' || c.id === 'nepo-baby');
+      } else break;
+    }
+    const drawn = newGs.deck.pop();
+    if (drawn.id === 'white-envelope') {
+      drewBomb = true; bombCard = drawn;
+      const hasDefuse = hand.some(c => c.id === 'labor-lawsuit');
+      const hasNepo   = hand.some(c => c.id === 'nepo-baby');
+      const hasC5     = !newGs.comboRightsUsed && hand.filter(c => ['green-tea','bubble-tea','cocoa'].includes(c.id)).length >= 5;
+      if (hasDefuse) {
+        const idx = hand.findIndex(c => c.id === 'labor-lawsuit');
+        newGs.discard.push(hand.splice(idx, 1)[0]);
+        const ins = Math.floor(Math.random() * (newGs.deck.length + 1));
+        newGs.deck.splice(ins, 0, drawn);
+        newGs.lastAction = `⏰ <span class="highlight">${newGs.players[pid].name}</span> หมดเวลา — ใช้ ⚖️ อัตโนมัติ`;
+        drewBomb = false;
+      } else if (hasNepo) {
+        const ni = hand.findIndex(c => c.id === 'nepo-baby');
+        hand.splice(ni, 1);
+        const targets = newGs.turnOrder.filter(p => !newGs.players[p].eliminated && p !== pid);
+        if (targets.length > 0) {
+          const t = targets[Math.floor(Math.random() * targets.length)];
+          const ins = Math.max(0, newGs.deck.length - 1);
+          newGs.deck.splice(ins, 0, drawn);
+          newGs.pendingAction = { type: 'WHITE_ENVELOPE_IN_DECK_FOR', targetId: t, targetName: newGs.players[t].name };
+          newGs.lastAction = `⏰ <span class="highlight">${newGs.players[pid].name}</span> หมดเวลา — 👶 เด็กเส้นอัตโนมัติ → ${newGs.players[t].name}`;
+          drewBomb = false;
+        } else { drewBomb = true; }
+      } else {
+        // Eliminate
+        const ph = newGs.players[pid].hand || [];
+        (newGs.discard = newGs.discard || []).push(...ph.filter(c => c.id !== 'nepo-baby'));
+        newGs.removedCards = (newGs.removedCards || 0) + 1 + ph.filter(c => c.id === 'nepo-baby').length;
+        newGs.players[pid].hand = [];
+        newGs.players[pid].eliminated = true;
+        newGs.lastAction = `⏰ <span style="color:var(--danger)">${newGs.players[pid].name} หมดเวลา + ซองขาว — ตกรอบ!</span>`;
+        drewBomb = false;
+      }
+      break;
+    } else {
+      hand.push(drawn);
+    }
+    if (newGs.attackDebt > 0) newGs.attackDebt = Math.max(0, newGs.attackDebt - 1);
+  }
+  if (newGs.attackDebt > 0) { newGs.attackDebt = 0; newGs.attackChainCount = 0; }
+  if (!drewBomb && !newGs.players[pid].eliminated) {
+    newGs.lastAction = (newGs.lastAction || '') || `⏰ <span class="highlight">${newGs.players[pid].name}</span> หมดเวลา — จั่วอัตโนมัติ`;
+  }
+  // Advance turn
+  const active = newGs.turnOrder.filter(p => !newGs.players[p].eliminated);
+  if (active.length <= 1) {
+    newGs.status = 'finished';
+    if (active.length === 1) newGs.lastAction = `🏆 <span class="highlight">${newGs.players[active[0]].name}</span> ชนะเกม!`;
+  } else {
+    let nextIdx = newGs.currentTurnIndex;
+    let safety = 0;
+    do {
+      nextIdx = (nextIdx + newGs.direction + newGs.turnOrder.length) % newGs.turnOrder.length;
+      safety++;
+    } while (newGs.players[newGs.turnOrder[nextIdx]]?.eliminated && safety < newGs.turnOrder.length);
+    newGs.currentTurnIndex = nextIdx;
+    newGs.players[newGs.turnOrder[nextIdx]].protected = false;
+    newGs.attackChainCount = newGs.attackDebt > 0 ? newGs.attackChainCount : 0;
+  }
+  newGs.turnStartTime = Date.now();
+  await saveGameState(newGs);
+}
 
 // ─── Visibility Change Handler (BUG-035: mobile sleep/wake) ────────────────────
 document.addEventListener('visibilitychange', ()=>{
