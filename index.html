@@ -1643,7 +1643,7 @@ function renderMyHand(gs, isMyTurn) {
     let pressStarted = false;
     let longPressed = false;
 
-    const startPress = ()=>{ pressStarted=true; longPressed=false; pressTimer=setTimeout(()=>{ longPressed=true; }, 2000); };
+    const startPress = ()=>{ pressStarted=true; longPressed=false; pressTimer=setTimeout(()=>{ longPressed=true; }, 1000); };
     const cancelPress = ()=>{ clearTimeout(pressTimer); pressStarted=false; };
     const handleCardTap = (e)=>{
       e.preventDefault(); e.stopPropagation();
@@ -2142,6 +2142,12 @@ async function autoResolvePending(pa) {
   if (pa.type==='FAVOR_REQUEST' && pa.to===myId) {
     const hand = gameState.players[myId]?.hand||[];
     await resolveFavor(hand.length>0 ? hand[Math.floor(Math.random()*hand.length)] : null, pa.from);
+  }
+  // BUG-077: auto-pass counter window if no response
+  if (pa.type==='COUNTER_WINDOW' && pa.targetId===myId) {
+    counterModalOpen=false;
+    closeModal('counterModal');
+    await resolveCounter(false, pa);
   }
   // ISSUE2: auto-resolve nepo bomb — use best option or eliminate
   if (pa.type==='NEPO_BOMB_FOR_TARGET' && pa.targetId===myId && pendingDefuse) {
@@ -2724,8 +2730,8 @@ function showCombo2ModeModal(gs, isSameType) {
 }
 
 async function doCombo2Normal(gs) {
-  const latestGs = JSON.parse(JSON.stringify(gameState));
-  const top2 = latestGs.deck.slice(-2).reverse();
+  // BUG-072: use gs (already has combo cards removed) not fresh gameState
+  const top2 = gs.deck.slice(-2).reverse();
   if (top2.length===0) { toast('กองไพ่ว่าง!','warning'); return; }
   const overlay = makeOverlay('combo2NormalOverlay');
   overlay.innerHTML = `
@@ -2746,8 +2752,8 @@ async function doCombo2Normal(gs) {
     wrap.append(div,name);
     wrap.onclick=async()=>{
       overlay.remove();
-      const ng=JSON.parse(JSON.stringify(gameState));
-      // BUG-020: pop up to 2 cards, pick chosen by uid (safe regardless of deck size)
+      // BUG-072: use gs (combo cards already removed) as base
+      const ng=JSON.parse(JSON.stringify(gs));
       const popped=[];
       for(let j=0;j<Math.min(2,ng.deck.length);j++) popped.push(ng.deck.pop());
       // Find chosen card by uid match (safe even if deck changed)
@@ -2891,11 +2897,19 @@ function showCombo3CardPicker(targetId) {
         ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✗ ไม่มี ${c.name} สุ่มขโมย 2 ใบ!`;
       }
       ng.pendingAction = null; // BUG-069: clear so player can draw
+      ng.lastPlayedCard=null; ng.lastPlayedFrom=null; ng.lastPlayedTo=null;
       await saveGameState(ng);
     };
     container.appendChild(item);
   });
-  document.getElementById('btnCombo3Cancel').onclick=()=>closeModal('combo3Modal');
+  document.getElementById('btnCombo3Cancel').onclick=async()=>{
+    closeModal('combo3Modal');
+    // BUG-075: clear pendingAction so player can draw
+    const ng=JSON.parse(JSON.stringify(gameState));
+    ng.pendingAction=null;
+    ng.lastPlayedCard=null; ng.lastPlayedFrom=null; ng.lastPlayedTo=null;
+    await saveGameState(ng);
+  };
   openModal('combo3Modal');
 }
 
@@ -2948,7 +2962,13 @@ function doCombo4Normal(gs, targets) {
       const div=document.createElement('div'); div.style.cssText='width:80px;height:112px;border-radius:10px;overflow:hidden;border:1px solid var(--border);flex-shrink:0';
       div.innerHTML=cardThumb(card.id,80); c.appendChild(div);
     });
-    overlay.querySelector('#c4NormalClose').onclick=()=>overlay.remove();
+    overlay.querySelector('#c4NormalClose').onclick=async()=>{
+      overlay.remove();
+      // BUG-073: clear popup state after viewing
+      const ng=JSON.parse(JSON.stringify(gs));
+      ng.lastPlayedCard=null; ng.lastPlayedFrom=null; ng.lastPlayedTo=null;
+      await saveGameState(ng);
+    };
   });
 }
 
@@ -2988,12 +3008,20 @@ function _showCombo4StealModal(targetId) {
           ng2.players[myId].hand.push(stolen);
           ng2.pendingAction=null;
           ng2.lastAction=`<span class="highlight">${myName}</span> Combo 4 ขโมย ${cd?.emoji} ${cd?.name} จาก ${p.name}!`;
+          ng2.lastPlayedCard=null; ng2.lastPlayedFrom=null; ng2.lastPlayedTo=null;
         }
         await saveGameState(ng2);
       };
       container.appendChild(div);
     });
-    document.getElementById('btnCombo4Cancel').onclick=()=>closeModal('combo4Modal');
+    document.getElementById('btnCombo4Cancel').onclick=async()=>{
+    closeModal('combo4Modal');
+    // BUG-076: clear pendingAction so player can draw
+    const ng=JSON.parse(JSON.stringify(gameState));
+    ng.pendingAction=null;
+    ng.lastPlayedCard=null; ng.lastPlayedFrom=null; ng.lastPlayedTo=null;
+    await saveGameState(ng);
+  };
     openModal('combo4Modal');
 }
 
@@ -3018,6 +3046,7 @@ async function doCombo5(gs, cards, isSameType) {
         const taken=ng.discard.splice(idx,1)[0];
         ng.players[myId].hand.push(taken);
         ng.lastAction=`<span class="highlight">${myName}</span> Combo 5 หยิบ ${cd?.emoji} ${cd?.name} จากกองทิ้ง!`;
+        ng.lastPlayedCard = null; ng.lastPlayedFrom = null; ng.lastPlayedTo = null; // BUG-074
       }
       await saveGameState(ng);
     };
@@ -3114,6 +3143,7 @@ function checkPendingActions(prevState) {
       return;
     }
     showCounterModal(pa);
+    startTargetTimer(pa); // BUG-077: auto-pass if no response in 60s
   }
 }
 
