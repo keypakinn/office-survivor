@@ -1668,9 +1668,10 @@ function playCardFlyAnimation(cardId, fromPid, toPid) {
   showCardUsedPopup(cardId, fromPid, toPid);
 }
 
-function showCardUsedPopup(cardId, fromPid, toPid) {
-  if (!cardId || !gameState) return;
-  const c = CARDS[cardId]; if (!c) return;
+function showCardUsedPopup(cardIds, fromPid, toPid) {
+  // cardIds can be a single string or array (for combo)
+  const ids = Array.isArray(cardIds) ? cardIds : [cardIds];
+  if (!ids.length || !gameState) return;
   const fromName = gameState.players[fromPid]?.name || '?';
   const toName   = toPid ? gameState.players[toPid]?.name : null;
 
@@ -1689,22 +1690,41 @@ function showCardUsedPopup(cardId, fromPid, toPid) {
   box.style.cssText = `
     background:var(--surface); border-radius:20px;
     padding:20px; display:flex; flex-direction:column;
-    align-items:center; gap:12px;
+    align-items:center; gap:10px;
     border:2px solid var(--accent2);
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
-    min-width:220px; max-width:min(80vw,300px);
+    min-width:220px; max-width:min(80vw,320px);
   `;
 
-  // Card image
-  const imgWrap = document.createElement('div');
-  imgWrap.style.cssText = 'width:min(60vw,200px);aspect-ratio:5/7;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
-  imgWrap.innerHTML = cardThumb(cardId, 200);
-  box.appendChild(imgWrap);
+  // Cards — stacked vertically with offset for combo
+  const cardStack = document.createElement('div');
+  cardStack.style.cssText = `
+    position:relative;
+    width:min(55vw,180px);
+    height:calc(min(55vw,180px)*1.4 + ${(ids.length-1)*18}px);
+    margin-bottom:4px;
+  `;
+  ids.forEach((cid, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `
+      position:absolute;
+      width:min(55vw,180px); aspect-ratio:5/7;
+      border-radius:12px; overflow:hidden;
+      box-shadow:0 4px 16px rgba(0,0,0,0.4);
+      top:${i*18}px; left:0;
+      border:2px solid rgba(255,255,255,0.15);
+    `;
+    wrap.innerHTML = cardThumb(cid, 180);
+    cardStack.appendChild(wrap);
+  });
+  box.appendChild(cardStack);
 
   // Sender
+  const mainCard = CARDS[ids[ids.length-1]];
   const sender = document.createElement('div');
-  sender.style.cssText = 'font-size:0.9rem;color:var(--text2);text-align:center;';
-  sender.innerHTML = `<span style="color:var(--accent);font-weight:700">${fromName}</span> ใช้ ${c.emoji} ${c.name}`;
+  sender.style.cssText = 'font-size:0.9rem;color:var(--text2);text-align:center;margin-top:4px;';
+  const label = ids.length > 1 ? `Combo ${ids.length}` : `${mainCard?.emoji||''} ${mainCard?.name||''}`;
+  sender.innerHTML = `<span style="color:var(--accent);font-weight:700">${fromName}</span> ใช้ ${label}`;
   box.appendChild(sender);
 
   // Target (if any)
@@ -1716,7 +1736,6 @@ function showCardUsedPopup(cardId, fromPid, toPid) {
   }
 
   overlay.appendChild(box);
-  // Dismiss on background click
   overlay.addEventListener('click', ()=>overlay.remove());
   box.addEventListener('click', e=>e.stopPropagation());
   document.body.appendChild(overlay);
@@ -2084,10 +2103,10 @@ function startTimer(gs, isMyTurn) {
     circle.textContent = '⏸'; circle.style.setProperty('--pct', 1); return;
   }
   const tick = ()=>{
-    const remaining = Math.max(0, 30 - Math.floor((Date.now()-(gs.turnStartTime||Date.now()))/1000));
+    const remaining = Math.max(0, 60 - Math.floor((Date.now()-(gs.turnStartTime||Date.now()))/1000));
     circle.textContent = remaining;
-    circle.style.setProperty('--pct', remaining/30);
-    if (remaining<=10 && remaining>0 && isMyTurn) SFX.play('timer_warn');
+    circle.style.setProperty('--pct', remaining/60);
+    if (remaining<=15 && remaining>0 && isMyTurn) SFX.play('timer_warn');
     if (remaining===0 && isMyTurn && !isDrawing && !pendingDefuse) {
       clearInterval(timerInterval); autoDrawCard();
     }
@@ -2100,7 +2119,7 @@ function startTargetTimer(pa) {
   targetTimerStart = Date.now();
   targetTimerInterval = setInterval(async ()=>{
     if (!gameState?.pendingAction) { clearInterval(targetTimerInterval); return; }
-    if (Date.now() - targetTimerStart >= 30000) {
+    if (Date.now() - targetTimerStart >= 60000) {
       clearInterval(targetTimerInterval);
       await autoResolvePending(pa);
     }
@@ -2210,6 +2229,8 @@ async function _drawOnce() {
   } else {
     gs.players[myId].hand = [...(gs.players[myId].hand||[]), drawn];
     SFX.play('draw');
+    // Issue2: clear lastPlayedCard so card popup doesn't re-fire on draw
+    gs.lastPlayedCard = null; gs.lastPlayedFrom = null; gs.lastPlayedTo = null;
   gs.lastAction = `<span class="highlight">${myName}</span> จั่วการ์ด`;
     // BUG-002 + BUG-031 + BUG-054: attackDebt handling — reduce debt, reset chain when done
     if (gs.attackDebt>0) {
@@ -2518,21 +2539,19 @@ async function doAttack(gs) {
   gs.attackDebt = (gs.attackDebt||0) + 2;
 
   const chainNow = gs.attackChainCount;
-  gs.lastPlayedCard='throw-work'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=gs.turnOrder[nextIdx];
-  gs.lastAction = `<span class="highlight">${myName}</span> 📋 โยนงาน! Chain ${chainNow}/3 (+2 รวม ${gs.attackDebt} จั่ว)`;
 
-  // Advance to next player
+  // Advance to next player FIRST (fix: declare nextIdx before use)
   let nextIdx = gs.currentTurnIndex;
   do { nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length; }
   while (gs.players[gs.turnOrder[nextIdx]]?.eliminated);
   gs.currentTurnIndex = nextIdx;
   gs.turnStartTime = Date.now();
 
-  // If chain = 3, resolve immediately — close chain
+  gs.lastPlayedCard='throw-work'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=gs.turnOrder[nextIdx];
+  gs.lastAction = `<span class="highlight">${myName}</span> 📋 โยนงาน! Chain ${chainNow}/3 (+2 รวม ${gs.attackDebt} จั่ว)`;
+
   if (chainNow >= MAX_CHAIN) {
     gs.lastAction = `<span class="highlight">${myName}</span> 📋 โยนงาน! Chain ครบ 3! 💥 ${gs.players[gs.turnOrder[nextIdx]]?.name} ต้องจั่ว ${gs.attackDebt} ใบ!`;
-    // Chain is now closed — attackChainCount stays at 3 to block further stacking
-    // It resets when the debt is resolved (in _drawOnce)
   }
   await saveGameState(gs);
 }
@@ -2585,15 +2604,15 @@ async function doFavor(gs, cardUid) {
     await saveGameState(gs); return;
   }
   showTargetModal('เลือกเป้าหมาย — แลกงาน', validTargets, gs, async targetId=>{
-    const newGs = JSON.parse(JSON.stringify(gameState));
+    // Issue1: use gs (already has card removed) not fresh gameState snapshot
+    const newGs = JSON.parse(JSON.stringify(gs));
     if (newGs.pendingAction) return;
-    // Open Counter window first — target can counter before favor resolves
     newGs.pendingAction = {
       type: 'COUNTER_WINDOW', effectType: 'FAVOR_REQUEST',
       effectName: 'แลกงาน', from: myId, fromName: myName,
       targetId, to: targetId
     };
-  gs.lastPlayedCard='work-swap'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=targetId;
+    newGs.lastPlayedCard='work-swap'; newGs.lastPlayedFrom=myId; newGs.lastPlayedTo=targetId;
     newGs.lastAction = `<span class="highlight">${myName}</span> 🔄 แลกงาน → ${newGs.players[targetId].name} (Counter ได้!)`;
     await saveGameState(newGs);
   });
@@ -2601,13 +2620,12 @@ async function doFavor(gs, cardUid) {
 
 // REVERSE — BUG-007 fix: attack debt stays as debt value, direction changes for next player
 async function doReverse(gs) {
+  // Issue3: HR จบเทิร์นทันที ไม่ต้องจั่ว
   const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated);
+  gs.lastPlayedCard='hr-restructure'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
+
   if (activePlayers.length===2) {
-    // BUG-019+022: Skip — advance past self back to self (skip opponent)
-    // With only 2 active players, skip = stay on current player's next turn
-    // Advance 2 hops in current direction, skipping eliminated players
-    gs.lastPlayedCard='hr-restructure'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
-  gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (2 คน = Skip)`;
+    // 2 คน: Skip = advance 2 hops
     let nextIdx=gs.currentTurnIndex; let hops=0; let safety=0;
     while(hops<2 && safety<gs.turnOrder.length*2) {
       nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length;
@@ -2615,16 +2633,20 @@ async function doReverse(gs) {
       safety++;
     }
     gs.currentTurnIndex=nextIdx;
-    gs.turnStartTime=Date.now(); // BUG-022 fix
+    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (2 คน = Skip)`;
   } else {
-    // BUG-007: flip direction — attack debt now travels the new way
+    // 3+ คน: เปลี่ยนทิศ แล้วจบเทิร์น (advance 1 hop in new direction)
     gs.direction *= -1;
-  gs.lastPlayedCard='hr-restructure'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
-    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (ทิศทางเปลี่ยน${gs.attackDebt>0?' + ส่ง debt ตามทิศใหม่':''})`;
-    // Don't advance turn — current player already played a card, turn continues
-    // The next player in new direction inherits the attack debt naturally
+    let nextIdx=gs.currentTurnIndex; let safety=0;
+    do {
+      nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length;
+      safety++;
+    } while(gs.players[gs.turnOrder[nextIdx]]?.eliminated && safety<gs.turnOrder.length);
+    gs.currentTurnIndex=nextIdx;
+    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! เปลี่ยนทิศทาง`;
   }
   gs.turnStartTime = Date.now();
+  if ((gs.attackDebt||0)===0) gs.attackChainCount = 0;
   await saveGameState(gs);
 }
 
@@ -2648,6 +2670,9 @@ async function executeCombo() {
   // Remove from hand
   comboResCards.forEach(cc=>{ const i=hand.findIndex(c=>c.uid===cc.uid); if(i>=0) gs.discard.push(hand.splice(i,1)[0]); });
   selectedCards = [];
+  // Issue4: store all combo card ids for popup
+  gs.lastPlayedCard = comboResCards.map(c=>c.id); // array for combo
+  gs.lastPlayedFrom = myId;
   isPlayingCard = true;
   try {
     if (n===2) await doCombo2(gs, comboResCards, isSameType);
