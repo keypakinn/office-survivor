@@ -1783,6 +1783,7 @@ let comboSlots = []; // selected combo resource uids
 function showComboResourcePreview(card, isMyTurn) {
   const c = CARDS[card.id]; if (!c) return;
   document.getElementById('cardPreviewOverlay')?.remove();
+  enableZoom();
 
   const overlay = document.createElement('div');
   overlay.id = 'cardPreviewOverlay';
@@ -1796,7 +1797,7 @@ function showComboResourcePreview(card, isMyTurn) {
 
   const img = document.createElement('div');
   img.style.cssText = `
-    width:min(80vw,320px);aspect-ratio:5/7;
+    width:min(88vw,380px);aspect-ratio:5/7;
     border-radius:20px;overflow:hidden;
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
     border:3px solid rgba(245,166,35,0.4);
@@ -1828,7 +1829,7 @@ function showComboResourcePreview(card, isMyTurn) {
     overlay.appendChild(addBtn);
   }
 
-  overlay.addEventListener('click', ()=>overlay.remove());
+  overlay.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); });
   img.addEventListener('click', e=>e.stopPropagation());
   document.body.appendChild(overlay);
 
@@ -1962,8 +1963,8 @@ function showCardPreview(card, isMyTurn) {
   SFX.play('card_tap');
   const c = CARDS[card.id]; if (!c) return;
 
-  // Remove existing preview if any
   document.getElementById('cardPreviewOverlay')?.remove();
+  enableZoom(); // allow pinch-to-zoom while preview is open
 
   const overlay = document.createElement('div');
   overlay.id = 'cardPreviewOverlay';
@@ -1978,7 +1979,7 @@ function showCardPreview(card, isMyTurn) {
 
   const img = document.createElement('div');
   img.style.cssText = `
-    width:min(70vw,280px); aspect-ratio:5/7;
+    width:min(88vw,380px); aspect-ratio:5/7;
     border-radius:20px; overflow:hidden;
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
     border:3px solid rgba(255,255,255,0.15);
@@ -1996,7 +1997,7 @@ function showCardPreview(card, isMyTurn) {
     playBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
       overlay.remove();
-      // Select this card and play it
+      disableZoom();
       selectedCards = [card.uid];
       renderMyHand(gameState, true);
       playSelectedCard();
@@ -2004,8 +2005,8 @@ function showCardPreview(card, isMyTurn) {
     overlay.appendChild(playBtn);
   }
 
-  // Tap anywhere outside card/button → close
-  overlay.addEventListener('click', ()=>overlay.remove());
+  // Tap anywhere outside card/button → close + disable zoom
+  overlay.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); });
   img.addEventListener('click', (e)=>e.stopPropagation());
 
   document.body.appendChild(overlay);
@@ -3575,6 +3576,16 @@ async function hostAutoAdvance(gs, pid) {
   }
   newGs.turnStartTime = Date.now();
   await saveGameState(newGs);
+}
+
+// ─── Zoom Control — enable only during card preview ─────────────────────────────
+function enableZoom() {
+  document.querySelector('meta[name="viewport"]').setAttribute('content',
+    'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
+}
+function disableZoom() {
+  document.querySelector('meta[name="viewport"]').setAttribute('content',
+    'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
 }
 
 // ─── Back-Forward Cache Prevention (iOS Safari/Chrome bfcache) ──────────────────
