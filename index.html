@@ -1682,7 +1682,7 @@ function showCardUsedPopup(cardId, fromPid, toPid) {
     position:fixed; inset:0; z-index:3500;
     display:flex; align-items:center; justify-content:center;
     background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
-    animation:fadeIn 0.2s ease; pointer-events:none;
+    animation:fadeIn 0.2s ease; pointer-events:auto; cursor:pointer;
   `;
 
   const box = document.createElement('div');
@@ -1716,6 +1716,9 @@ function showCardUsedPopup(cardId, fromPid, toPid) {
   }
 
   overlay.appendChild(box);
+  // Dismiss on background click
+  overlay.addEventListener('click', ()=>overlay.remove());
+  box.addEventListener('click', e=>e.stopPropagation());
   document.body.appendChild(overlay);
   setTimeout(() => overlay.remove(), 2500);
 }
@@ -1999,7 +2002,9 @@ function updateActionButtons(gs, isMyTurn) {
   );
   // WHITE_ENVELOPE_IN_DECK_FOR: nepo target must be able to draw
   const isNepoForMe = pa?.type==='WHITE_ENVELOPE_IN_DECK_FOR' && pa?.targetId===myId;
-  const blocksTurn = pa && pa.type !== 'COUNTER_WINDOW' && !isNepoForMe;
+  // NEPO_BOMB_FOR_TARGET: block everyone's draw, target uses defuse modal instead
+  const isNepoBomb = pa?.type==='NEPO_BOMB_FOR_TARGET';
+  const blocksTurn = (pa && pa.type !== 'COUNTER_WINDOW' && !isNepoForMe) || isNepoBomb;
 
   if (isElim) {
     // BUG-028: eliminated = spectator mode, disable all actions but keep UI visible
@@ -2108,6 +2113,26 @@ async function autoResolvePending(pa) {
     const hand = gameState.players[myId]?.hand||[];
     await resolveFavor(hand.length>0 ? hand[Math.floor(Math.random()*hand.length)] : null, pa.from);
   }
+  // ISSUE2: auto-resolve nepo bomb — use best option or eliminate
+  if (pa.type==='NEPO_BOMB_FOR_TARGET' && pa.targetId===myId && pendingDefuse) {
+    const hand = gameState.players[myId]?.hand||[];
+    const hasDefuse = hand.some(c=>c.id==='labor-lawsuit');
+    const hasNepo   = hand.some(c=>c.id==='nepo-baby');
+    if (hasDefuse) {
+      // Auto insert at random position
+      const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+      gs.pendingAction = null;
+      const hand2 = gs.players[myId].hand;
+      const di = hand2.findIndex(c=>c.id==='labor-lawsuit');
+      if(di>=0){ gs.discard.push(hand2.splice(di,1)[0]); }
+      const pos = Math.floor(Math.random()*(gs.deck.length+1));
+      gs.deck.splice(pos,0,pendingDefuse.drawn);
+      gs.lastAction=`⏰ ${myName} หมดเวลา — ใช้ฟ้องอัตโนมัติ`;
+      pendingDefuse=null; await saveGameState(gs);
+    } else {
+      await eliminateMe();
+    }
+  }
 }
 
 async function autoDrawCard() {
@@ -2126,9 +2151,10 @@ async function drawCard() {
   if (!myId || !gs.players[myId]) return;
   if (gs.turnOrder[gs.currentTurnIndex]!==myId) return;
   if (gs.players[myId]?.eliminated) return;
-  // Allow draw if pendingAction is WHITE_ENVELOPE_IN_DECK_FOR targeting me
-  // (nepo sent bomb to my deck — I need to draw it)
+  // Block all actions during NEPO_BOMB_FOR_TARGET (target handles via modal)
   const pa = gs.pendingAction;
+  if (pa?.type==='NEPO_BOMB_FOR_TARGET') return; // block draw — target uses defuse modal
+  // Allow draw if pendingAction is WHITE_ENVELOPE_IN_DECK_FOR targeting me
   const isNepoTarget = pa?.type==='WHITE_ENVELOPE_IN_DECK_FOR' && pa?.targetId===myId;
   if (pa && !isNepoTarget) return;
 
@@ -2314,6 +2340,8 @@ function showInsertModal(deckSize) {
 async function insertDefuse(insertIdx) {
   if (!pendingDefuse) return;
   const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
+  // ISSUE2: clear NEPO_BOMB_FOR_TARGET so turn can advance
+  if (gs.pendingAction?.type === 'NEPO_BOMB_FOR_TARGET') gs.pendingAction = null;
   gs.deck.splice(insertIdx, 0, pendingDefuse.drawn);
   pendingDefuse = null;
 
@@ -2366,25 +2394,22 @@ async function executeNepo(targetId) {
   // Remove nepo from hand (Remove From Game — not discard)
   const hand = gs.players[myId].hand;
   const idx = hand.findIndex(c=>c.id==='nepo-baby'); if (idx>=0) hand.splice(idx,1);
-  // BUG-061: track nepo as removed from game
-  gs.removedCards = (gs.removedCards||0) + 1;
-  // BUG-025 fix: insert bomb near top of deck (target will draw it next turn)
-  // Then set pendingAction so target must respond when they draw it
-  const insertPos = Math.max(0, gs.deck.length - 1); // 2nd from top
-  gs.deck.splice(insertPos, 0, bomb);
+  gs.removedCards = (gs.removedCards||0) + 1; // BUG-061
+  // ISSUE2: send bomb directly to target — target must resolve immediately
+  // pendingAction NEPO_BOMB_FOR_TARGET blocks turn until target resolves
   gs.pendingAction = {
-    type: 'WHITE_ENVELOPE_IN_DECK_FOR',
+    type: 'NEPO_BOMB_FOR_TARGET',
     targetId,
     targetName: gs.players[targetId].name,
+    bomb,  // pass bomb object so target can use it in defuse modal
   };
   SFX.play('nepo');
   gs.lastPlayedCard='nepo-baby'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=targetId;
-  gs.lastAction = `<span class="highlight">${myName}</span> 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name} (จะจั่วได้ในเทิร์นหน้า!)`;
+  gs.lastAction = `<span class="highlight">${myName}</span> 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name} ทันที!`;
   pendingDefuse = null;
-  // Flash
   const flash = document.createElement('div'); flash.className='nepo-flash'; document.body.appendChild(flash);
   setTimeout(()=>flash.remove(),600);
-  await advanceTurn(gs);
+  await saveGameState(gs); // save with pendingAction, don't advance turn yet
 }
 
 // ─── Eliminate ────────────────────────────────────────────────────────────────
@@ -2393,6 +2418,10 @@ async function eliminateMe() {
   if (!pendingDefuse) return;
   const gs = JSON.parse(JSON.stringify(pendingDefuse.gs));
   const drawnBomb = pendingDefuse.drawn; // BUG-040: track drawn white-envelope
+  // ISSUE2: if this elimination was from nepo bomb, clear the pendingAction
+  if (pendingDefuse.gs?.pendingAction?.type === 'NEPO_BOMB_FOR_TARGET') {
+    pendingDefuse.gs.pendingAction = null;
+  }
   pendingDefuse = null;
   const hand = gs.players[myId].hand||[];
   gs.discard.push(...hand.filter(c=>c.id!=='nepo-baby'));
@@ -2983,6 +3012,21 @@ function checkPendingActions(prevState) {
     startTargetTimer(pa); // FIX2
   }
 
+  // NEPO_BOMB_FOR_TARGET — target must resolve immediately (defuse/nepo/lose)
+  if (pa.type==='NEPO_BOMB_FOR_TARGET' && pa.targetId===myId && !pendingDefuse) {
+    const hand = gameState.players[myId]?.hand||[];
+    const hasDefuse = hand.some(c=>c.id==='labor-lawsuit');
+    const hasNepo   = hand.some(c=>c.id==='nepo-baby');
+    const hasCombo5 = !gameState.comboRightsUsed &&
+      hand.filter(c=>['green-tea','bubble-tea','cocoa'].includes(c.id)).length>=5;
+    // Set up pendingDefuse with the bomb so useDefuse/useNepo/eliminateMe work normally
+    const gs = JSON.parse(JSON.stringify(gameState));
+    pendingDefuse = { gs, drawn: pa.bomb };
+    showDefuseModal(hasDefuse, hasNepo, hasCombo5);
+    startTargetTimer(pa); // 30s auto-resolve
+    return;
+  }
+
   // COUNTER_ACTIVE — player has combo 2 special ready, waiting for counterable effect
   if (pa.type==='COUNTER_ACTIVE') {
     // Counter expires at end of turn — nothing to do here, just wait
@@ -3130,6 +3174,8 @@ async function advanceTurn(gs) {
   if ((gs.attackDebt||0) === 0) gs.attackChainCount = 0;
   // BUG-063: clear COUNTER_ACTIVE when turn advances (counter expires)
   if (gs.pendingAction?.type === 'COUNTER_ACTIVE') gs.pendingAction = null;
+  // ISSUE1: reset lastPlayedCard so popup doesn't re-fire on next version bump
+  gs.lastPlayedCard = null; gs.lastPlayedFrom = null; gs.lastPlayedTo = null;
   const activePlayers=gs.turnOrder.filter(pid=>!gs.players[pid].eliminated);
   if (activePlayers.length<=1) {
     gs.status='finished';
