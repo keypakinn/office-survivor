@@ -1571,11 +1571,14 @@ function renderGame() {
     discardCardEl.innerHTML = '';
   }
 
-  // FIX3: detect new action and trigger card fly if applicable
+  // FIX3: show card used popup when action changes
   const prevAction = document.getElementById('actionLog').innerHTML;
   const newAction = gs.lastAction||'';
-  if (newAction !== prevAction && gs.lastPlayedCard && gs.lastPlayedFrom && gs.lastPlayedTo) {
-    playCardFlyAnimation(gs.lastPlayedCard, gs.lastPlayedFrom, gs.lastPlayedTo);
+  const prevCard = document.getElementById('actionLog').dataset.lastCard||'';
+  const cardKey = `${gs.lastPlayedCard}_${gs.lastPlayedFrom}_${gs.version}`;
+  if (gs.lastPlayedCard && cardKey !== prevCard) {
+    document.getElementById('actionLog').dataset.lastCard = cardKey;
+    showCardUsedPopup(gs.lastPlayedCard, gs.lastPlayedFrom, gs.lastPlayedTo||null);
   }
   document.getElementById('actionLog').innerHTML = newAction;
   renderPlayersStrip(gs, currentPid);
@@ -1660,51 +1663,61 @@ function showCardDetail(card) {
   }
 }
 
-// ─── Card Fly Animation ───────────────────────────────────────────────────────
+// ─── Card Used Popup ──────────────────────────────────────────────────────────
 function playCardFlyAnimation(cardId, fromPid, toPid) {
+  showCardUsedPopup(cardId, fromPid, toPid);
+}
+
+function showCardUsedPopup(cardId, fromPid, toPid) {
+  if (!cardId || !gameState) return;
   const c = CARDS[cardId]; if (!c) return;
-  if (!fromPid || !toPid) return;
+  const fromName = gameState.players[fromPid]?.name || '?';
+  const toName   = toPid ? gameState.players[toPid]?.name : null;
 
-  // Get positions from player chips
-  const strips = document.getElementById('playersStrip');
-  if (!strips) return;
-  const chips = strips.querySelectorAll('.player-chip');
-  const order = gameState?.turnOrder || [];
-  const fromIdx = order.indexOf(fromPid);
-  const toIdx = order.indexOf(toPid);
+  document.getElementById('cardUsedPopup')?.remove();
 
-  const fromChip = chips[fromIdx];
-  const toChip = chips[toIdx];
-  if (!fromChip || !toChip) return;
-
-  const fromRect = fromChip.getBoundingClientRect();
-  const toRect = toChip.getBoundingClientRect();
-
-  const el = document.createElement('div');
-  el.style.cssText = `
-    position:fixed;
-    width:60px; height:84px;
-    border-radius:8px; overflow:hidden;
-    z-index:4000; pointer-events:none;
-    left:${fromRect.left + fromRect.width/2 - 30}px;
-    top:${fromRect.top + fromRect.height/2 - 42}px;
-    box-shadow:0 8px 24px rgba(0,0,0,0.5);
-    transition:none;
+  const overlay = document.createElement('div');
+  overlay.id = 'cardUsedPopup';
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:3500;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
+    animation:fadeIn 0.2s ease; pointer-events:none;
   `;
-  el.innerHTML = `<img src="${cardImg(cardId)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=font-size:2rem;text-align:center;line-height:84px>${c.emoji}</div>'">`;
-  document.body.appendChild(el);
 
-  // Animate after paint
-  requestAnimationFrame(()=>{
-    requestAnimationFrame(()=>{
-      const dx = toRect.left + toRect.width/2 - 30 - (fromRect.left + fromRect.width/2 - 30);
-      const dy = toRect.top + toRect.height/2 - 42 - (fromRect.top + fromRect.height/2 - 42);
-      el.style.transition = 'transform 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.5s';
-      el.style.transform = `translate(${dx}px, ${dy}px) scale(0.8)`;
-      el.style.opacity = '0';
-      setTimeout(()=>el.remove(), 550);
-    });
-  });
+  const box = document.createElement('div');
+  box.style.cssText = `
+    background:var(--surface); border-radius:20px;
+    padding:20px; display:flex; flex-direction:column;
+    align-items:center; gap:12px;
+    border:2px solid var(--accent2);
+    box-shadow:0 16px 48px rgba(0,0,0,0.6);
+    min-width:220px; max-width:min(80vw,300px);
+  `;
+
+  // Card image
+  const imgWrap = document.createElement('div');
+  imgWrap.style.cssText = 'width:min(60vw,200px);aspect-ratio:5/7;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+  imgWrap.innerHTML = cardThumb(cardId, 200);
+  box.appendChild(imgWrap);
+
+  // Sender
+  const sender = document.createElement('div');
+  sender.style.cssText = 'font-size:0.9rem;color:var(--text2);text-align:center;';
+  sender.innerHTML = `<span style="color:var(--accent);font-weight:700">${fromName}</span> ใช้ ${c.emoji} ${c.name}`;
+  box.appendChild(sender);
+
+  // Target (if any)
+  if (toName) {
+    const target = document.createElement('div');
+    target.style.cssText = 'font-size:0.85rem;color:var(--text2);text-align:center;';
+    target.innerHTML = `→ <span style="color:var(--danger);font-weight:700">${toName}</span>`;
+    box.appendChild(target);
+  }
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 2500);
 }
 
 // ─── Your Turn Popup ──────────────────────────────────────────────────────────
@@ -2365,6 +2378,7 @@ async function executeNepo(targetId) {
     targetName: gs.players[targetId].name,
   };
   SFX.play('nepo');
+  gs.lastPlayedCard='nepo-baby'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=targetId;
   gs.lastAction = `<span class="highlight">${myName}</span> 👶 เด็กเส้น! ส่งซองขาวให้ ${gs.players[targetId].name} (จะจั่วได้ในเทิร์นหน้า!)`;
   pendingDefuse = null;
   // Flash
@@ -2496,6 +2510,7 @@ async function doAttack(gs) {
 
 async function doFuture(gs) {
   const top3 = gs.deck.slice(-3).reverse();
+  gs.lastPlayedCard='fortune-teller'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
   gs.lastAction = `<span class="highlight">${myName}</span> 🔮 อัญเชิญแม่หมอ! ดู 3 ใบ`;
   await saveGameState(gs);
   showFutureModal(top3);
@@ -2519,6 +2534,8 @@ function showFutureModal(cards) {
 // BUG-009 fix: protection is cleared at START of player's next turn, not end of current
 async function doSickLeave(gs) {
   gs.players[myId].protected = true;
+  gs.lastPlayedCard='sick-leave'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
+  gs.lastPlayedCard='sick-leave'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
   gs.lastAction = `<span class="highlight">${myName}</span> 🏥 ลาป่วย! ป้องกัน Favor/Combo3/Combo4/เด็กเส้น`;
   await saveGameState(gs);
   toast('🏥 ลาป่วยแล้ว! กดจั่วไพ่เพื่อจบเทิร์น','success');
@@ -2547,6 +2564,7 @@ async function doFavor(gs, cardUid) {
       effectName: 'แลกงาน', from: myId, fromName: myName,
       targetId, to: targetId
     };
+  gs.lastPlayedCard='work-swap'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=targetId;
     newGs.lastAction = `<span class="highlight">${myName}</span> 🔄 แลกงาน → ${newGs.players[targetId].name} (Counter ได้!)`;
     await saveGameState(newGs);
   });
@@ -2559,7 +2577,8 @@ async function doReverse(gs) {
     // BUG-019+022: Skip — advance past self back to self (skip opponent)
     // With only 2 active players, skip = stay on current player's next turn
     // Advance 2 hops in current direction, skipping eliminated players
-    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (2 คน = Skip)`;
+    gs.lastPlayedCard='hr-restructure'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
+  gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (2 คน = Skip)`;
     let nextIdx=gs.currentTurnIndex; let hops=0; let safety=0;
     while(hops<2 && safety<gs.turnOrder.length*2) {
       nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length;
@@ -2571,6 +2590,7 @@ async function doReverse(gs) {
   } else {
     // BUG-007: flip direction — attack debt now travels the new way
     gs.direction *= -1;
+  gs.lastPlayedCard='hr-restructure'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
     gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (ทิศทางเปลี่ยน${gs.attackDebt>0?' + ส่ง debt ตามทิศใหม่':''})`;
     // Don't advance turn — current player already played a card, turn continues
     // The next player in new direction inherits the attack debt naturally
@@ -2610,6 +2630,7 @@ async function executeCombo() {
 
 // COMBO 2
 async function doCombo2(gs, cards, isSameType) {
+  gs.lastPlayedCard='green-tea'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
   gs.lastAction = `<span class="highlight">${myName}</span> 🥤🥤 Combo 2!`;
   await saveGameState(gs);
   showCombo2ModeModal(gs, isSameType);
@@ -2703,6 +2724,7 @@ function doCombo2Counter(gs) {
 async function doCombo3(gs, cards, isSameType) {
   const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated && pid!==myId && !gs.players[pid].protected);
   if (activePlayers.length===0) { toast('ไม่มีเป้าหมาย (ทุกคนลาป่วย)','error'); return; }
+  gs.lastPlayedCard='green-tea'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
   gs.lastAction = `<span class="highlight">${myName}</span> 🥤🥤🥤 Combo 3!`;
   await saveGameState(gs);
   showCombo3ModeModal(gs, activePlayers, isSameType);
@@ -2732,6 +2754,7 @@ async function doCombo3Normal(gs, targets) {
     // BUG-018: open Counter Window for target before resolving steal
     const ng=JSON.parse(JSON.stringify(gameState));
     if (ng.pendingAction) return;
+    ng.lastPlayedTo = targetId; // BUG-068
     ng.pendingAction={
       type:'COUNTER_WINDOW', effectType:'COMBO3_NORMAL',
       effectName:'Combo 3 (สุ่มขโมย)', from:myId, fromName:myName, targetId, to:targetId
@@ -2762,6 +2785,7 @@ function doCombo3Special(gs, targets) {
       type:'COUNTER_WINDOW', effectType:'COMBO3_SPECIAL',
       effectName:'Combo 3 Special (เรียกชื่อการ์ด)', from:myId, fromName:myName, targetId, to:targetId
     };
+    ng.lastPlayedTo = targetId; // BUG-068
     ng.lastAction=`<span class="highlight">${myName}</span> 🥤×3 Combo 3 Special → ${ng.players[targetId].name} (Counter ได้!)`;
     await saveGameState(ng);
   });
@@ -2769,7 +2793,16 @@ function doCombo3Special(gs, targets) {
 
 function showCombo3CardPicker(targetId) {
   const container = document.getElementById('combo3CardSelector'); container.innerHTML='';
-  const cardTypes = Object.values(CARDS).filter(c=>!['white-envelope','nepo-baby'].includes(c.id));
+  // BUG-071: show card types actually present in the game (deck+discard+all hands)
+  // not just all possible card types
+  const gs = gameState;
+  const allCardsInGame = [
+    ...(gs.deck||[]),
+    ...(gs.discard||[]),
+    ...Object.values(gs.players).flatMap(p=>p.hand||[])
+  ];
+  const presentIds = new Set(allCardsInGame.map(c=>c.id).filter(id=>id!=='white-envelope'&&id!=='nepo-baby'));
+  const cardTypes = Object.values(CARDS).filter(c=>presentIds.has(c.id));
   cardTypes.forEach(c=>{
     const item=document.createElement('div'); item.className='card-sel-item';
     const imgDiv=document.createElement('div'); imgDiv.style.cssText='width:100%;flex:1;overflow:hidden;border-radius:6px;';
@@ -2793,6 +2826,7 @@ function showCombo3CardPicker(targetId) {
         }
         ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✗ ไม่มี ${c.name} สุ่มขโมย 2 ใบ!`;
       }
+      ng.pendingAction = null; // BUG-069: clear so player can draw
       await saveGameState(ng);
     };
     container.appendChild(item);
@@ -2805,6 +2839,7 @@ function showCombo3CardPicker(targetId) {
 async function doCombo4(gs, cards, isSameType) {
   const activePlayers = gs.turnOrder.filter(pid=>!gs.players[pid].eliminated && pid!==myId && !gs.players[pid].protected);
   if (activePlayers.length===0) { toast('ไม่มีเป้าหมาย','error'); return; }
+  gs.lastPlayedCard='green-tea'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
   gs.lastAction=`<span class="highlight">${myName}</span> 🥤×4 Combo 4!`;
   await saveGameState(gs);
   showCombo4ModeModal(gs, activePlayers, isSameType);
@@ -2831,7 +2866,9 @@ function showCombo4ModeModal(gs, targets, isSameType) {
 
 function doCombo4Normal(gs, targets) {
   showTargetModal('เลือกเป้าหมาย — Combo 4 Normal', targets, gs, targetId=>{
-    const p=gs.players[targetId];
+    // BUG-066: use latest gameState to show current hand, not stale snapshot
+    const latestGs = gameState || gs;
+    const p=latestGs.players[targetId];
     const hand=p.hand||[];
     const overlay=makeOverlay('combo4NormalOverlay');
     overlay.innerHTML=`
@@ -2860,6 +2897,7 @@ function doCombo4Special(gs, targets) {
       type:'COUNTER_WINDOW', effectType:'COMBO4_SPECIAL',
       effectName:'Combo 4 Special (เลือกขโมย)', from:myId, fromName:myName, targetId, to:targetId
     };
+    ng0.lastPlayedTo = targetId; // BUG-068
     ng0.lastAction=`<span class="highlight">${myName}</span> 🥤×4 Combo 4 Special → ${ng0.players[targetId].name} (Counter ได้!)`;
     await saveGameState(ng0);
     // actual steal modal opens after counter resolves (in resolveCounter → COMBO4_SPECIAL path)
@@ -2900,10 +2938,11 @@ function _showCombo4StealModal(targetId) {
 async function doCombo5(gs, cards, isSameType) {
   const discard=gs.discard.filter(c=>c.id!=='nepo-baby');
   if (discard.length===0) { toast('กองทิ้งว่าง!','warning'); return; }
+  gs.lastPlayedCard='green-tea'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
   gs.lastAction=`<span class="highlight">${myName}</span> 🥤×5 Combo 5 — เลือกจากกองทิ้ง`;
   await saveGameState(gs);
   const container=document.getElementById('combo5Grid'); container.innerHTML='';
-  [...discard].reverse().slice(0,20).forEach(dc=>{
+  [...discard].reverse().forEach(dc=>{  // BUG-067: show all, not just 20
     const cd=CARDS[dc.id];
     const div=document.createElement('div'); div.className='discard-grid-card'; div.style.cursor='pointer';
     div.innerHTML=`<img src="${cardImg(dc.id)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span style=font-size:1.5rem>${cd?.emoji||'?'}</span>'">`;
@@ -2942,6 +2981,13 @@ function checkPendingActions(prevState) {
     if (hand.length===0) { resolveFavor(null, pa.from); return; }
     showFavorResponse(pa.from, pa.fromName, hand);
     startTargetTimer(pa); // FIX2
+  }
+
+  // COUNTER_ACTIVE — player has combo 2 special ready, waiting for counterable effect
+  if (pa.type==='COUNTER_ACTIVE') {
+    // Counter expires at end of turn — nothing to do here, just wait
+    // (counter will trigger automatically when COUNTER_WINDOW is opened)
+    return;
   }
 
   // WHITE_ENVELOPE_IN_DECK — warn target that nepo sent bomb their way
@@ -3082,6 +3128,8 @@ async function resolveFavor(card, fromId) {
 async function advanceTurn(gs) {
   // BUG-054: reset attack chain if debt is 0 (fully resolved)
   if ((gs.attackDebt||0) === 0) gs.attackChainCount = 0;
+  // BUG-063: clear COUNTER_ACTIVE when turn advances (counter expires)
+  if (gs.pendingAction?.type === 'COUNTER_ACTIVE') gs.pendingAction = null;
   const activePlayers=gs.turnOrder.filter(pid=>!gs.players[pid].eliminated);
   if (activePlayers.length<=1) {
     gs.status='finished';
