@@ -227,6 +227,8 @@
     overflow-x: auto;
     padding: 4px 0 8px;
     scrollbar-width: none;
+    justify-content: center;
+    flex-wrap: wrap;
   }
   .players-strip::-webkit-scrollbar { display: none; }
 
@@ -247,7 +249,7 @@
   .player-chip.current-turn { border-color: var(--accent3); }
   .player-chip.eliminated { opacity: 0.35; }
   .player-chip.me { border-color: rgba(245,166,35,0.4); }
-  .player-chip-avatar { font-size: 1.6rem; }
+  .player-chip-avatar { font-size: 0.8rem; font-weight: 700; display:flex; align-items:center; justify-content:center; }
   .player-chip-name { font-size: 0.7rem; font-weight: 600; color: var(--text2); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .player-chip-count {
     font-size: 0.65rem;
@@ -367,7 +369,7 @@
   }
   .hand-card img {
     width: 100%; height: 100%;
-    object-fit: cover;
+    object-fit: cover; object-position: center;
     border-radius: 10px;
     pointer-events: none;
   }
@@ -720,6 +722,10 @@
   <div class="logo">
     <div class="logo-title">🏢 Office Survivor</div>
     <div class="logo-sub">ใครโดนซองขาวก่อน แพ้!</div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+      <button class="btn btn-ghost" style="flex:1;max-width:140px;font-size:0.85rem;padding:8px;" id="btnShowRules">📖 กติกา</button>
+      <button class="btn btn-ghost" style="flex:1;max-width:140px;font-size:0.85rem;padding:8px;" id="btnShowAllCards">🃏 การ์ดทั้งหมด</button>
+    </div>
   </div>
 
   <div class="panel flex-col">
@@ -738,6 +744,15 @@
 </div>
 
 <!-- ══════════════════════════════════════ -->
+<!-- SCREEN: RULES (full screen) -->
+<div id="rulesScreen" class="screen" style="overflow-y:auto;padding:20px 16px 40px;">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:10;border-bottom:1px solid var(--border);">
+    <button class="btn btn-ghost" style="max-width:80px;padding:8px;" id="btnRulesBack">← กลับ</button>
+    <div style="font-family:Kanit,sans-serif;font-size:1.2rem;font-weight:900;">📖 กติกา Office Survivor</div>
+  </div>
+  <div id="rulesContent"></div>
+</div>
+
 <!--  SCREEN: ROOM (LOBBY)                  -->
 <!-- ══════════════════════════════════════ -->
 <div id="roomScreen" class="screen" style="justify-content:flex-start;padding-top:40px;">
@@ -778,6 +793,8 @@
       <div class="indicator direction" id="directionIndicator">→</div>
       <div class="indicator attack" id="attackIndicator" style="display:none">⚡ x<span id="attackDebtNum">0</span></div>
       <button id="btnMuteToggle" style="background:none;border:none;font-size:1.2rem;cursor:pointer;padding:4px 6px;border-radius:8px;color:var(--text2);" title="เปิด/ปิดเสียง">🔊</button>
+      <button id="btnGameRules" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px 6px;border-radius:8px;color:var(--text2);" title="กติกา">📖</button>
+      <button id="btnGameCards" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px 6px;border-radius:8px;color:var(--text2);" title="การ์ดทั้งหมด">🃏</button>
     </div>
   </div>
 
@@ -794,7 +811,8 @@
         <div class="pile-count" id="deckCount">0 ใบ</div>
       </div>
 
-      <div style="flex:1;max-width:160px;">
+      <div style="flex:1;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <button class="btn btn-primary" id="btnDraw" style="border-radius:50px;padding:12px 16px;font-size:0.95rem;width:100%;max-width:120px;">จั่วไพ่ →</button>
         <div class="action-log" id="actionLog">เกมเริ่มแล้ว ✨</div>
       </div>
 
@@ -825,7 +843,6 @@
   <div class="action-bar">
     <button class="btn btn-ghost" id="btnPlayCard" disabled>🃏 เล่นการ์ด</button>
     <button class="btn btn-accent" id="btnCombo" style="display:none;">✨ Combo!</button>
-    <button class="btn btn-primary" id="btnDraw">จั่วไพ่ →</button>
   </div>
 
 </div>
@@ -1054,15 +1071,33 @@ const SFX = (() => {
           break;
         }
         case 'bomb': {
-          // Explosion
-          const buf = ac.createBuffer(1, ac.sampleRate*0.5, ac.sampleRate);
-          const d = buf.getChannelData(0);
-          for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5)*0.5;
-          const src = ac.createBufferSource(); src.buffer=buf;
-          const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=300;
-          const g = ac.createGain(); g.gain.setValueAtTime(1,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.5);
-          src.connect(f); f.connect(g); g.connect(ac.destination);
-          src.start(now);
+          // Heavy explosion — 3 layers: bass boom + noise burst + high crack
+          // Layer 1: deep bass boom
+          const boom = ac.createOscillator(); const boomG = ac.createGain();
+          boom.connect(boomG); boomG.connect(ac.destination);
+          boom.frequency.setValueAtTime(80, now);
+          boom.frequency.exponentialRampToValueAtTime(20, now+0.8);
+          boomG.gain.setValueAtTime(0, now);
+          boomG.gain.linearRampToValueAtTime(1.0, now+0.02);
+          boomG.gain.exponentialRampToValueAtTime(0.001, now+0.8);
+          boom.start(now); boom.stop(now+0.8);
+          // Layer 2: noise burst
+          const bufN = ac.createBuffer(1, ac.sampleRate*0.6, ac.sampleRate);
+          const dN = bufN.getChannelData(0);
+          for(let i=0;i<dN.length;i++) dN[i]=(Math.random()*2-1)*Math.pow(1-i/dN.length,1.2)*0.7;
+          const srcN = ac.createBufferSource(); srcN.buffer=bufN;
+          const fN = ac.createBiquadFilter(); fN.type='bandpass'; fN.frequency.value=200; fN.Q.value=0.5;
+          const gN = ac.createGain(); gN.gain.setValueAtTime(1,now); gN.gain.exponentialRampToValueAtTime(0.001,now+0.6);
+          srcN.connect(fN); fN.connect(gN); gN.connect(ac.destination);
+          srcN.start(now);
+          // Layer 3: high crack
+          const crack = ac.createOscillator(); const crackG = ac.createGain();
+          crack.type='sawtooth'; crack.connect(crackG); crackG.connect(ac.destination);
+          crack.frequency.setValueAtTime(300,now); crack.frequency.exponentialRampToValueAtTime(50,now+0.15);
+          crackG.gain.setValueAtTime(0.6,now); crackG.gain.exponentialRampToValueAtTime(0.001,now+0.15);
+          crack.start(now); crack.stop(now+0.15);
+          // Vibrate — long pattern for bomb
+          if (navigator.vibrate) navigator.vibrate([100,50,100,50,300]);
           break;
         }
         case 'defuse': {
@@ -1613,7 +1648,7 @@ function renderPlayersStrip(gs, currentPid) {
     const chip = document.createElement('div');
     chip.className = `player-chip ${pid===currentPid?'current-turn':''} ${p.eliminated?'eliminated':''} ${pid===myId?'me':''}`;
     chip.innerHTML = `
-      <div class="player-chip-avatar">${avatars[i%avatars.length]}</div>
+      <div class="player-chip-avatar" style="font-size:0.8rem;font-weight:700;letter-spacing:-0.5px;">${(p.name||'?').slice(0,3).toUpperCase()}</div>
       <div class="player-chip-name">${p.name}</div>
       <div class="player-chip-count">${(p.hand||[]).length} ใบ</div>
       ${p.protected?'<div class="player-chip-protected">🏥</div>':''}
@@ -1959,12 +1994,50 @@ function showComboBuilder(triggerCard) {
   renderModal();
 }
 
+// ─── Discard Pile Preview ────────────────────────────────────────────────────────
+function showDiscardPreview(discard) {
+  document.getElementById('discardPreviewOverlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'discardPreviewOverlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:2000;
+    background:rgba(0,0,0,0.92);backdrop-filter:blur(4px);
+    display:flex;flex-direction:column;overflow:hidden;
+  `;
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;flex-shrink:0;border-bottom:1px solid var(--border);">
+      <div style="font-family:Kanit,sans-serif;font-size:1rem;font-weight:700;">🗂️ กองทิ้ง (${discard.length} ใบ)</div>
+      <button style="background:none;border:none;color:var(--text2);font-size:1.5rem;cursor:pointer;padding:4px 8px;" id="discardPreviewClose">✕</button>
+    </div>
+    <div id="discardPreviewGrid" style="
+      display:grid;grid-template-columns:repeat(4,1fr);
+      gap:8px;padding:12px;overflow-y:auto;flex:1;
+    "></div>
+  `;
+  const grid = overlay.querySelector('#discardPreviewGrid');
+  [...discard].reverse().forEach(card=>{
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'aspect-ratio:5/7;border-radius:8px;overflow:hidden;cursor:pointer;border:1px solid var(--border);';
+    wrap.innerHTML = cardThumb(card.id, 100);
+    wrap.addEventListener('click', e=>{
+      e.stopPropagation();
+      overlay.remove();
+      showCardPreview(card, false);
+    });
+    grid.appendChild(wrap);
+  });
+  overlay.querySelector('#discardPreviewClose').onclick = ()=>overlay.remove();
+  overlay.addEventListener('click', ()=>overlay.remove());
+  overlay.querySelector('#discardPreviewGrid').addEventListener('click', e=>e.stopPropagation());
+  document.body.appendChild(overlay);
+}
+
 function showCardPreview(card, isMyTurn) {
   SFX.play('card_tap');
   const c = CARDS[card.id]; if (!c) return;
 
   document.getElementById('cardPreviewOverlay')?.remove();
-  enableZoom(); // allow pinch-to-zoom while preview is open
+  enableZoom();
 
   const overlay = document.createElement('div');
   overlay.id = 'cardPreviewOverlay';
@@ -1972,50 +2045,76 @@ function showCardPreview(card, isMyTurn) {
     position:fixed; inset:0; z-index:2000;
     display:flex; flex-direction:column;
     align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.85);
-    backdrop-filter:blur(6px);
+    background:rgba(0,0,0,0.92);
     animation:fadeIn 0.15s ease;
+    overflow:hidden;
   `;
 
+  // Full-screen card image
+  const imgWrap = document.createElement('div');
+  imgWrap.style.cssText = `
+    flex:1; display:flex; align-items:center; justify-content:center;
+    width:100%; overflow:hidden; padding:16px 16px 8px;
+  `;
   const img = document.createElement('div');
+  img.id = 'previewCardImg';
   img.style.cssText = `
-    width:min(88vw,380px); aspect-ratio:5/7;
-    border-radius:20px; overflow:hidden;
+    width:100%; max-width:420px; aspect-ratio:5/7;
+    border-radius:16px; overflow:hidden;
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
-    border:3px solid rgba(255,255,255,0.15);
-    margin-bottom:24px;
+    border:2px solid rgba(255,255,255,0.15);
+    transform-origin:center; transition:transform 0.1s;
   `;
-  img.innerHTML = cardThumb(card.id, 280);
+  img.innerHTML = cardThumb(card.id, 420);
+  imgWrap.appendChild(img);
+  overlay.appendChild(imgWrap);
 
-  overlay.appendChild(img);
+  // Zoom slider
+  const sliderWrap = document.createElement('div');
+  sliderWrap.style.cssText = 'width:80%;max-width:300px;padding:8px 0;display:flex;align-items:center;gap:8px;';
+  sliderWrap.innerHTML = `
+    <span style="font-size:0.8rem;color:var(--text2);">🔍</span>
+    <input type="range" id="previewZoomSlider" min="1" max="3" step="0.1" value="1"
+      style="flex:1;accent-color:var(--accent);height:4px;">
+    <span style="font-size:0.8rem;color:var(--text2);">🔎</span>
+  `;
+  overlay.appendChild(sliderWrap);
+  sliderWrap.querySelector('#previewZoomSlider').addEventListener('input', e=>{
+    e.stopPropagation();
+    img.style.transform = `scale(${e.target.value})`;
+  });
+  sliderWrap.addEventListener('click', e=>e.stopPropagation());
 
+  // Play button (if my turn)
   if (isMyTurn && !gameState?.players[myId]?.eliminated) {
     const playBtn = document.createElement('button');
     playBtn.className = 'btn btn-primary';
-    playBtn.style.cssText = 'max-width:200px; font-size:1.1rem;';
+    playBtn.style.cssText = 'max-width:220px;font-size:1rem;margin-bottom:16px;';
     playBtn.textContent = '🃏 เล่นการ์ดนี้';
     playBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
-      overlay.remove();
-      disableZoom();
+      overlay.remove(); disableZoom();
       selectedCards = [card.uid];
       renderMyHand(gameState, true);
       playSelectedCard();
     });
     overlay.appendChild(playBtn);
+  } else {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'color:var(--text2);font-size:0.8rem;margin-bottom:16px;';
+    hint.textContent = 'กดที่ไหนก็ได้เพื่อปิด';
+    overlay.appendChild(hint);
   }
 
-  // Tap anywhere outside card/button → close + disable zoom
+  // Tap anywhere → close
   overlay.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); });
-  img.addEventListener('click', (e)=>e.stopPropagation());
+  imgWrap.addEventListener('click', e=>e.stopPropagation()); // allow zoom drag
+  img.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); }); // tap card = close
 
   document.body.appendChild(overlay);
-
-  // Add fadeIn keyframe if not exists
   if (!document.getElementById('previewStyle')) {
-    const s = document.createElement('style');
-    s.id = 'previewStyle';
-    s.textContent = '@keyframes fadeIn{from{opacity:0}to{opacity:1}}';
+    const s=document.createElement('style'); s.id='previewStyle';
+    s.textContent='@keyframes fadeIn{from{opacity:0}to{opacity:1}}';
     document.head.appendChild(s);
   }
 }
@@ -3441,6 +3540,20 @@ document.getElementById('btnCopyCode').onclick=()=>{
   const url=`${location.href.split('?')[0]}?room=${code}`;
   navigator.clipboard.writeText(url).then(()=>toast('คัดลอก link แล้ว! 📋','success'));
 };
+// 3: Discard pile click → preview (ทุกคนรวมคนตาย)
+document.getElementById('discardPile').addEventListener('click', ()=>{
+  const discard = gameState?.discard||[];
+  if (discard.length===0) { toast('กองทิ้งว่าง','info',1500); return; }
+  showDiscardPreview(discard);
+});
+
+// Rules & Cards buttons
+document.getElementById('btnShowRules').onclick = ()=>showRulesScreen();
+document.getElementById('btnShowAllCards').onclick = ()=>showAllCardsModal();
+document.getElementById('btnRulesBack').onclick = ()=>showScreen('homeScreen');
+document.getElementById('btnGameRules').onclick = ()=>showRulesModal();
+document.getElementById('btnGameCards').onclick = ()=>showAllCardsModal();
+
 document.getElementById('btnMuteToggle').onclick=()=>{
   const on=SFX.toggle();
   document.getElementById('btnMuteToggle').textContent=on?'🔊':'🔇';
@@ -3576,6 +3689,142 @@ async function hostAutoAdvance(gs, pid) {
   }
   newGs.turnStartTime = Date.now();
   await saveGameState(newGs);
+}
+
+// ─── Rules & All Cards ───────────────────────────────────────────────────────────
+const RULES_HTML = `
+<h2 style="color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:8px;">🎯 วิธีเล่นโดยรวม</h2>
+<p>ผู้เล่นผลัดกันจั่วไพ่จากกองจั่ว ใครจั่วได้ <strong>📄 ซองขาว</strong> แล้วไม่มีการ์ดป้องกัน = ตกรอบ คนสุดท้ายที่รอดชนะ</p>
+<p>ทุกเทิร์น: <strong>เล่นการ์ด (ไม่บังคับ) → จั่วไพ่ 1 ใบ</strong></p>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">📄 ซองขาว (White Envelope)</h2>
+<p>จั่วแล้วต้องใช้การ์ดป้องกัน ถ้าไม่มี = ตกรอบทันที จำนวน = ผู้เล่น - 1</p>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🛡️ การ์ดป้องกันซองขาว</h2>
+<div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;">
+  <p><strong>⚖️ ฟ้องกรมแรงงาน</strong> — ใส่ซองขาวกลับกองจั่วที่ตำแหน่งที่เลือกได้</p>
+  <p><strong>👶 เด็กเส้น</strong> — ส่งซองขาวให้ผู้เล่นอื่นทันที (ป้องกันไม่ได้ด้วยลาป่วย) เด็กเส้น = Remove From Game</p>
+  <p><strong>🥤×5 ร้องเรียนผู้บริหาร</strong> — ใช้ Combo 5 Special ตอนจั่วซองขาว (1 ครั้ง/เกม)</p>
+</div>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🎴 การ์ด Action</h2>
+<div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
+  <p><strong>📋 โยนงาน</strong> — จบเทิร์นทันที ส่งภาระ +2 เทิร์นไปผู้เล่นถัดไป Stack ได้สูงสุด 3 ชั้น (6 เทิร์น)</p>
+  <p><strong>🔮 อัญเชิญแม่หมอ</strong> — ดู 3 ใบบนสุดของกองจั่ว (คนอื่นไม่เห็น)</p>
+  <p><strong>🏥 ลาป่วย</strong> — ป้องกันตัวเองจาก Effect ที่มีเป้าหมาย 1 เทิร์น (ยกเว้นเด็กเส้น)</p>
+  <p><strong>🔄 แลกงาน</strong> — เลือกผู้เล่น → เขาต้องส่งการ์ด 1 ใบให้คุณ (Counter ได้)</p>
+  <p><strong>📢 HR ปรับโครงสร้าง</strong> — จบเทิร์นทันที เปลี่ยนทิศทางการเล่น (2 คน = ข้ามเทิร์น)</p>
+</div>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">✨ ระบบ Combo</h2>
+<p>เลือก Combo Resource 2-5 ใบ แล้วกดปุ่ม Combo ก่อนจั่ว</p>
+<p><strong>Normal</strong> = ต่างชนิดได้ | <strong>Special</strong> = ต้องชนิดเดียวกันทั้งหมด</p>
+<div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
+  <p><strong>🥤×2 Combo 2 Normal</strong> — ดู 2 ใบบนสุด เก็บ 1 ใบ</p>
+  <p><strong>🥤×2 Combo 2 Special</strong> — เปิด Counter Mode ยกเลิก แลกงาน/Combo 3/Combo 4 ได้ (หมดอายุเมื่อจบเทิร์น)</p>
+  <p><strong>🥤×3 Combo 3 Normal</strong> — สุ่มขโมย 1 ใบจากมือผู้เล่นที่เลือก</p>
+  <p><strong>🥤×3 Combo 3 Special</strong> — ดูการ์ดในเกมทั้งหมด เรียกชื่อการ์ดที่ต้องการ (ไม่มี = สุ่มขโมย 2 ใบ)</p>
+  <p><strong>🥤×4 Combo 4 Normal</strong> — ดูไพ่ทั้งหมดในมือผู้เล่นที่เลือก</p>
+  <p><strong>🥤×4 Combo 4 Special</strong> — ดูมือผู้เล่น แล้วเลือกขโมย 1 ใบ</p>
+  <p><strong>🥤×5 Combo 5 Normal</strong> — หยิบการ์ด 1 ใบจากกองทิ้ง (ยกเว้นเด็กเส้น)</p>
+  <p><strong>🥤×5 Combo 5 Special</strong> — ร้องเรียนผู้บริหาร ใช้แทนฟ้องกรมแรงงานตอนจั่วซองขาว (1 ครั้ง/เกม)</p>
+</div>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">⚡ Attack Chain</h2>
+<p>โยนงาน Stack ได้สูงสุด 3 ชั้น = 6 เทิร์น ครบ 3 ชั้น = Resolve ทันที ไม่สามารถ Stack ต่อได้</p>
+<p>HR ปรับโครงสร้างระหว่าง Chain = เปลี่ยนทิศทาง แต่ Chain ยังดำเนินต่อ</p>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🔀 ระบบ Reshuffle</h2>
+<p>เมื่อกองจั่วหมด → นำกองทิ้งทั้งหมด (รวมซองขาว) มา Shuffle ใหม่เป็นกองจั่ว</p>
+
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">⏱️ Timer</h2>
+<p>แต่ละเทิร์น 60 วินาที หมดเวลา = จั่วอัตโนมัติ ถ้าจั่วได้ซองขาว = ใช้การป้องกันอัตโนมัติ</p>
+`;
+
+function showRulesScreen() {
+  document.getElementById('rulesContent').innerHTML = RULES_HTML;
+  showScreen('rulesScreen');
+}
+
+function showRulesModal() {
+  document.getElementById('rulesModalContent')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'rulesModalContent';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:3000;
+    background:rgba(0,0,0,0.85);display:flex;flex-direction:column;overflow:hidden;`;
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <button style="background:none;border:none;color:var(--text2);font-size:1.5rem;cursor:pointer;" id="rulesModalClose">✕</button>
+      <div style="font-family:Kanit,sans-serif;font-size:1.1rem;font-weight:900;">📖 กติกา</div>
+    </div>
+    <div style="overflow-y:auto;padding:16px 16px 40px;flex:1;">${RULES_HTML}</div>
+  `;
+  overlay.querySelector('#rulesModalClose').onclick = ()=>overlay.remove();
+  document.body.appendChild(overlay);
+}
+
+function showAllCardsModal() {
+  document.getElementById('allCardsModal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'allCardsModal';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:3000;
+    background:rgba(0,0,0,0.92);display:flex;flex-direction:column;overflow:hidden;`;
+
+  const cardGroups = {
+    'Survival': ['labor-lawsuit','nepo-baby'],
+    'Action': ['throw-work','fortune-teller','sick-leave','work-swap','hr-restructure'],
+    'Combo': ['green-tea','bubble-tea','cocoa'],
+    'Danger': ['white-envelope'],
+  };
+  const groupColors = {
+    'Survival':'var(--accent3)','Action':'var(--accent)','Combo':'var(--accent2)','Danger':'var(--danger)'
+  };
+  const groupIcons = {'Survival':'🛡️','Action':'⚡','Combo':'✨','Danger':'💀'};
+
+  let html = `
+    <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <button style="background:none;border:none;color:var(--text2);font-size:1.5rem;cursor:pointer;" id="allCardsClose">✕</button>
+      <div style="font-family:Kanit,sans-serif;font-size:1.1rem;font-weight:900;">🃏 การ์ดทั้งหมด</div>
+    </div>
+    <div style="overflow-y:auto;padding:16px;flex:1;">
+  `;
+  Object.entries(cardGroups).forEach(([group, ids])=>{
+    html += `<div style="margin-bottom:20px;">
+      <div style="font-family:Kanit,sans-serif;font-size:1rem;font-weight:700;
+        color:${groupColors[group]};margin-bottom:10px;padding:6px 12px;
+        background:${groupColors[group]}22;border-radius:8px;display:inline-block;">
+        ${groupIcons[group]} ${group}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">`;
+    ids.forEach(id=>{
+      const c = CARDS[id];
+      if (!c) return;
+      html += `<div class="all-card-item" data-card-id="${id}"
+        style="cursor:pointer;border-radius:10px;overflow:hidden;
+          border:2px solid ${groupColors[group]}44;
+          display:flex;flex-direction:column;align-items:center;">
+        <div style="width:100%;aspect-ratio:5/7;overflow:hidden;">
+          <img src="${cardImg(id)}" style="width:100%;height:100%;object-fit:cover;"
+            onerror="this.outerHTML='<div style=display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--surface);font-size:2rem>${c.emoji}</div>'">
+        </div>
+        <div style="padding:6px;text-align:center;font-size:0.7rem;font-weight:700;
+          background:var(--surface);width:100%;">${c.emoji} ${c.name}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+  overlay.innerHTML = html;
+
+  overlay.querySelector('#allCardsClose').onclick = ()=>overlay.remove();
+  overlay.querySelectorAll('.all-card-item').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const cardId = el.dataset.cardId;
+      const fakeCard = {id:cardId, uid:'preview'};
+      showCardPreview(fakeCard, false);
+    });
+  });
+  document.body.appendChild(overlay);
 }
 
 // ─── Zoom Control — enable only during card preview ─────────────────────────────
