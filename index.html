@@ -1070,36 +1070,40 @@ const SFX = (() => {
           o.start(now); o.stop(now+0.12);
           break;
         }
-        case 'bomb': {
-          // Heavy explosion — 3 layers: bass boom + noise burst + high crack
-          // Layer 1: deep bass boom
-          const boom = ac.createOscillator(); const boomG = ac.createGain();
-          boom.connect(boomG); boomG.connect(ac.destination);
-          boom.frequency.setValueAtTime(80, now);
-          boom.frequency.exponentialRampToValueAtTime(20, now+0.8);
-          boomG.gain.setValueAtTime(0, now);
-          boomG.gain.linearRampToValueAtTime(1.0, now+0.02);
-          boomG.gain.exponentialRampToValueAtTime(0.001, now+0.8);
-          boom.start(now); boom.stop(now+0.8);
-          // Layer 2: noise burst
-          const bufN = ac.createBuffer(1, ac.sampleRate*0.6, ac.sampleRate);
-          const dN = bufN.getChannelData(0);
-          for(let i=0;i<dN.length;i++) dN[i]=(Math.random()*2-1)*Math.pow(1-i/dN.length,1.2)*0.7;
-          const srcN = ac.createBufferSource(); srcN.buffer=bufN;
-          const fN = ac.createBiquadFilter(); fN.type='bandpass'; fN.frequency.value=200; fN.Q.value=0.5;
-          const gN = ac.createGain(); gN.gain.setValueAtTime(1,now); gN.gain.exponentialRampToValueAtTime(0.001,now+0.6);
-          srcN.connect(fN); fN.connect(gN); gN.connect(ac.destination);
-          srcN.start(now);
-          // Layer 3: high crack
-          const crack = ac.createOscillator(); const crackG = ac.createGain();
-          crack.type='sawtooth'; crack.connect(crackG); crackG.connect(ac.destination);
-          crack.frequency.setValueAtTime(300,now); crack.frequency.exponentialRampToValueAtTime(50,now+0.15);
-          crackG.gain.setValueAtTime(0.6,now); crackG.gain.exponentialRampToValueAtTime(0.001,now+0.15);
-          crack.start(now); crack.stop(now+0.15);
-          // Vibrate — long pattern for bomb
-          if (navigator.vibrate) navigator.vibrate([100,50,100,50,300]);
+                case 'bomb': {
+          // MEGA explosion — 4 layers for maximum impact
+          // Layer 1: Ultra-deep sub bass
+          const sub = ac.createOscillator(); const subG = ac.createGain();
+          sub.connect(subG); subG.connect(ac.destination);
+          sub.frequency.setValueAtTime(60, now);
+          sub.frequency.exponentialRampToValueAtTime(15, now+1.2);
+          subG.gain.setValueAtTime(0,now); subG.gain.linearRampToValueAtTime(1.5,now+0.01);
+          subG.gain.exponentialRampToValueAtTime(0.001,now+1.2);
+          sub.start(now); sub.stop(now+1.2);
+          // Layer 2: Mid boom
+          const mid = ac.createOscillator(); const midG = ac.createGain();
+          mid.type='sawtooth'; mid.connect(midG); midG.connect(ac.destination);
+          mid.frequency.setValueAtTime(120,now); mid.frequency.exponentialRampToValueAtTime(30,now+0.6);
+          midG.gain.setValueAtTime(0,now); midG.gain.linearRampToValueAtTime(0.8,now+0.02);
+          midG.gain.exponentialRampToValueAtTime(0.001,now+0.6);
+          mid.start(now); mid.stop(now+0.6);
+          // Layer 3: White noise explosion
+          const bufE=ac.createBuffer(1,ac.sampleRate*0.8,ac.sampleRate);
+          const dE=bufE.getChannelData(0);
+          for(let i=0;i<dE.length;i++) dE[i]=(Math.random()*2-1)*Math.pow(1-i/dE.length,0.8);
+          const srcE=ac.createBufferSource(); srcE.buffer=bufE;
+          const fE=ac.createBiquadFilter(); fE.type='lowpass'; fE.frequency.value=800;
+          const gE=ac.createGain(); gE.gain.setValueAtTime(1.2,now); gE.gain.exponentialRampToValueAtTime(0.001,now+0.8);
+          srcE.connect(fE); fE.connect(gE); gE.connect(ac.destination); srcE.start(now);
+          // Layer 4: Sharp impact crack
+          const crack=ac.createOscillator(); const crackG=ac.createGain();
+          crack.type='square'; crack.connect(crackG); crackG.connect(ac.destination);
+          crack.frequency.setValueAtTime(500,now); crack.frequency.exponentialRampToValueAtTime(40,now+0.1);
+          crackG.gain.setValueAtTime(0.8,now); crackG.gain.exponentialRampToValueAtTime(0.001,now+0.1);
+          crack.start(now); crack.stop(now+0.1);
+          // Long dramatic vibration pattern
+          if (navigator.vibrate) navigator.vibrate([200,50,150,50,100,50,300]);
           break;
-        }
         case 'defuse': {
           // Success ding
           [523,659,784].forEach((freq,i) => {
@@ -1742,6 +1746,25 @@ function showCardUsedPopup(cardIds, fromPid, toPid) {
     min-width:220px; max-width:min(80vw,320px);
   `;
 
+  // Special bomb popup
+  if (ids[0] === 'white-envelope') {
+    overlay.style.background = 'rgba(180,0,0,0.92)';
+    const bombTitle = document.createElement('div');
+    bombTitle.style.cssText = `
+      font-family:Kanit,sans-serif;font-size:1.6rem;font-weight:900;
+      color:#fff;text-shadow:0 0 20px rgba(255,100,0,0.8);
+      animation:bombPulse 0.3s ease;margin-bottom:8px;
+    `;
+    const pName = gameState?.players[fromPid]?.name || '?';
+    bombTitle.textContent = `💣 ${pName} จั่วได้ซองขาว!`;
+    box.insertBefore(bombTitle, box.firstChild);
+    if (!document.getElementById('bombStyle')) {
+      const s=document.createElement('style'); s.id='bombStyle';
+      s.textContent='@keyframes bombPulse{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}';
+      document.head.appendChild(s);
+    }
+  }
+
   // Cards — stacked vertically with offset for combo
   const cardStack = document.createElement('div');
   cardStack.style.cssText = `
@@ -2015,7 +2038,11 @@ function showDiscardPreview(discard) {
     "></div>
   `;
   const grid = overlay.querySelector('#discardPreviewGrid');
-  [...discard].reverse().forEach(card=>{
+  // Sort by HAND_SORT_ORDER then show most recent first within same type
+  const DISCARD_SORT = {'nepo-baby':1,'labor-lawsuit':2,'throw-work':3,'work-swap':4,
+    'fortune-teller':5,'hr-restructure':6,'sick-leave':7,'bubble-tea':8,'green-tea':9,'cocoa':10,'white-envelope':11};
+  const sorted = [...discard].sort((a,b)=>(DISCARD_SORT[a.id]||50)-(DISCARD_SORT[b.id]||50));
+  sorted.forEach(card=>{
     const wrap = document.createElement('div');
     wrap.style.cssText = 'aspect-ratio:5/7;border-radius:8px;overflow:hidden;cursor:pointer;border:1px solid var(--border);';
     wrap.innerHTML = cardThumb(card.id, 100);
@@ -2051,27 +2078,36 @@ function showCardPreview(card, isMyTurn) {
   `;
 
   // Full-screen card image
+  // Scrollable container for pan after zoom
+  const scrollWrap = document.createElement('div');
+  scrollWrap.style.cssText = `
+    flex:1; overflow:auto; width:100%;
+    display:flex; align-items:center; justify-content:center;
+    -webkit-overflow-scrolling:touch;
+  `;
   const imgWrap = document.createElement('div');
   imgWrap.style.cssText = `
-    flex:1; display:flex; align-items:center; justify-content:center;
-    width:100%; overflow:hidden; padding:16px 16px 8px;
+    display:flex; align-items:center; justify-content:center;
+    min-width:100%; min-height:100%; padding:16px;
   `;
   const img = document.createElement('div');
   img.id = 'previewCardImg';
   img.style.cssText = `
-    width:100%; max-width:420px; aspect-ratio:5/7;
+    width:min(85vw,360px); aspect-ratio:5/7;
     border-radius:16px; overflow:hidden;
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
     border:2px solid rgba(255,255,255,0.15);
-    transform-origin:center; transition:transform 0.1s;
+    transform-origin:top center; transition:transform 0.15s;
+    flex-shrink:0;
   `;
-  img.innerHTML = cardThumb(card.id, 420);
+  img.innerHTML = cardThumb(card.id, 360);
   imgWrap.appendChild(img);
-  overlay.appendChild(imgWrap);
+  scrollWrap.appendChild(imgWrap);
+  overlay.appendChild(scrollWrap);
 
   // Zoom slider
   const sliderWrap = document.createElement('div');
-  sliderWrap.style.cssText = 'width:80%;max-width:300px;padding:8px 0;display:flex;align-items:center;gap:8px;';
+  sliderWrap.style.cssText = 'width:80%;max-width:300px;padding:8px 0;display:flex;align-items:center;gap:8px;flex-shrink:0;';
   sliderWrap.innerHTML = `
     <span style="font-size:0.8rem;color:var(--text2);">🔍</span>
     <input type="range" id="previewZoomSlider" min="1" max="3" step="0.1" value="1"
@@ -2079,9 +2115,15 @@ function showCardPreview(card, isMyTurn) {
     <span style="font-size:0.8rem;color:var(--text2);">🔎</span>
   `;
   overlay.appendChild(sliderWrap);
+  let currentZoom = 1;
   sliderWrap.querySelector('#previewZoomSlider').addEventListener('input', e=>{
     e.stopPropagation();
-    img.style.transform = `scale(${e.target.value})`;
+    currentZoom = parseFloat(e.target.value);
+    img.style.transform = `scale(${currentZoom})`;
+    // expand scroll area to allow panning
+    const base = parseInt(img.style.width||'360');
+    imgWrap.style.minWidth = `${Math.max(100, base*currentZoom+32)}px`;
+    imgWrap.style.minHeight = `${Math.max(100, base*currentZoom*1.4+32)}px`;
   });
   sliderWrap.addEventListener('click', e=>e.stopPropagation());
 
@@ -2108,8 +2150,8 @@ function showCardPreview(card, isMyTurn) {
 
   // Tap anywhere → close
   overlay.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); });
-  imgWrap.addEventListener('click', e=>e.stopPropagation()); // allow zoom drag
-  img.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); }); // tap card = close
+  scrollWrap.addEventListener('click', e=>e.stopPropagation()); // allow pan
+  imgWrap.addEventListener('click', ()=>{ overlay.remove(); disableZoom(); }); // tap = close
 
   document.body.appendChild(overlay);
   if (!document.getElementById('previewStyle')) {
@@ -2341,6 +2383,11 @@ async function _drawOnce() {
       gs.pendingAction = null;
     }
     SFX.play('bomb');
+    // Notify all players: bomb drawn — save to Firebase immediately
+    gs.lastPlayedCard = 'white-envelope';
+    gs.lastPlayedFrom = myId;
+    gs.lastPlayedTo = null;
+    await saveGameState(gs); // broadcast bomb to all clients
     pendingDefuse = { gs, drawn };
     showDefuseModal(hasDefuse, hasNepo, hasCombo5);
   } else {
@@ -2741,15 +2788,14 @@ async function doReverse(gs) {
   gs.lastPlayedCard='hr-restructure'; gs.lastPlayedFrom=myId; gs.lastPlayedTo=null;
 
   if (activePlayers.length===2) {
-    // 2 คน: Skip = advance 2 hops
-    let nextIdx=gs.currentTurnIndex; let hops=0; let safety=0;
-    while(hops<2 && safety<gs.turnOrder.length*2) {
+    // 2 คน: ข้ามเทิร์นตัวเอง → advance 1 hop ไปอีกคน
+    let nextIdx=gs.currentTurnIndex; let safety=0;
+    do {
       nextIdx=(nextIdx+gs.direction+gs.turnOrder.length)%gs.turnOrder.length;
-      if (!gs.players[gs.turnOrder[nextIdx]]?.eliminated) hops++;
       safety++;
-    }
+    } while(gs.players[gs.turnOrder[nextIdx]]?.eliminated && safety<gs.turnOrder.length);
     gs.currentTurnIndex=nextIdx;
-    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (2 คน = Skip)`;
+    gs.lastAction = `<span class="highlight">${myName}</span> 📢 HR ปรับโครงสร้าง! (ข้ามเทิร์น)`;
   } else {
     // 3+ คน: เปลี่ยนทิศ แล้วจบเทิร์น (advance 1 hop in new direction)
     gs.direction *= -1;
@@ -3693,7 +3739,7 @@ async function hostAutoAdvance(gs, pid) {
 
 // ─── Rules & All Cards ───────────────────────────────────────────────────────────
 const RULES_HTML = `
-<h2 style="color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:8px;">🎯 วิธีเล่นโดยรวม</h2>
+<h2 style="color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:8px;">🎯 วิธีการเล่น</h2>
 <p>ผู้เล่นผลัดกันจั่วไพ่จากกองจั่ว ใครจั่วได้ <strong>📄 ซองขาว</strong> แล้วไม่มีการ์ดป้องกัน = ตกรอบ คนสุดท้ายที่รอดชนะ</p>
 <p>ทุกเทิร์น: <strong>เล่นการ์ด (ไม่บังคับ) → จั่วไพ่ 1 ใบ</strong></p>
 
@@ -3703,36 +3749,36 @@ const RULES_HTML = `
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🛡️ การ์ดป้องกันซองขาว</h2>
 <div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;">
   <p><strong>⚖️ ฟ้องกรมแรงงาน</strong> — ใส่ซองขาวกลับกองจั่วที่ตำแหน่งที่เลือกได้</p>
-  <p><strong>👶 เด็กเส้น</strong> — ส่งซองขาวให้ผู้เล่นอื่นทันที (ป้องกันไม่ได้ด้วยลาป่วย) เด็กเส้น = Remove From Game</p>
-  <p><strong>🥤×5 ร้องเรียนผู้บริหาร</strong> — ใช้ Combo 5 Special ตอนจั่วซองขาว (1 ครั้ง/เกม)</p>
+  <p><strong>👶 เด็กเส้น</strong> — ส่งซองขาวให้ผู้เล่นอื่นทันที (ป้องกันได้ด้วย ฟ้องกรมแรงงาน หรือ เด็กเส้น เท่านั้น) เมื่อใช้งานแล้ว เด็กเส้นจะถูกลบออกจากเกมส์ ไม่อยู่ในกองทิ้ง</p>
+  <p><strong>🥤×5 ร้องเรียนผู้บริหาร</strong> — ใช้ Combo 5 Special ตอนจั่วซองขาว (ใช้ได้ 1 ครั้ง/เกม)</p>
 </div>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🎴 การ์ด Action</h2>
 <div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
-  <p><strong>📋 โยนงาน</strong> — จบเทิร์นทันที ส่งภาระ +2 เทิร์นไปผู้เล่นถัดไป Stack ได้สูงสุด 3 ชั้น (6 เทิร์น)</p>
+  <p><strong>📋 โยนงาน</strong> — จบเทิร์นทันที ผู้เล่นคนถัดไปต้องจั่ว 2 ใบ สามารถสะสมได้้สูงสุด 3 ชั้น (จั่ว 6 ใบ)</p>
   <p><strong>🔮 อัญเชิญแม่หมอ</strong> — ดู 3 ใบบนสุดของกองจั่ว (คนอื่นไม่เห็น)</p>
   <p><strong>🏥 ลาป่วย</strong> — ป้องกันตัวเองจาก Effect ที่มีเป้าหมาย 1 เทิร์น (ยกเว้นเด็กเส้น)</p>
-  <p><strong>🔄 แลกงาน</strong> — เลือกผู้เล่น → เขาต้องส่งการ์ด 1 ใบให้คุณ (Counter ได้)</p>
-  <p><strong>📢 HR ปรับโครงสร้าง</strong> — จบเทิร์นทันที เปลี่ยนทิศทางการเล่น (2 คน = ข้ามเทิร์น)</p>
+  <p><strong>🔄 แลกงาน</strong> — เลือกผู้เล่น → เขาต้องส่งการ์ด 1 ใบให้คุณ (ใช้ Combo Counter ได้)</p>
+  <p><strong>📢 HR ปรับโครงสร้าง</strong> — จบเทิร์นทันที และเปลี่ยนทิศทางการเล่น</p>
 </div>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">✨ ระบบ Combo</h2>
-<p>เลือก Combo Resource 2-5 ใบ แล้วกดปุ่ม Combo ก่อนจั่ว</p>
+<p>กดปุ่ม Combo แล้วเลือก Combo Resource (โกโก้ปั่น/ชานมไข่มุก/ชาเขียว) ได้ตั้งแต่ 2-5 ใบ</p>
 <p><strong>Normal</strong> = ต่างชนิดได้ | <strong>Special</strong> = ต้องชนิดเดียวกันทั้งหมด</p>
 <div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
-  <p><strong>🥤×2 Combo 2 Normal</strong> — ดู 2 ใบบนสุด เก็บ 1 ใบ</p>
-  <p><strong>🥤×2 Combo 2 Special</strong> — เปิด Counter Mode ยกเลิก แลกงาน/Combo 3/Combo 4 ได้ (หมดอายุเมื่อจบเทิร์น)</p>
+  <p><strong>🥤×2 Combo 2 Normal</strong> — ดู 2 ใบบนสุด แล้วเลือกเก็บขึ้นมือ 1 ใบ</p>
+  <p><strong>🥤×2 Combo 2 Special</strong> — เปิด Counter Mode ยกเลิก แลกงาน/Combo 3/Combo 4 ได้</p>
   <p><strong>🥤×3 Combo 3 Normal</strong> — สุ่มขโมย 1 ใบจากมือผู้เล่นที่เลือก</p>
-  <p><strong>🥤×3 Combo 3 Special</strong> — ดูการ์ดในเกมทั้งหมด เรียกชื่อการ์ดที่ต้องการ (ไม่มี = สุ่มขโมย 2 ใบ)</p>
+  <p><strong>🥤×3 Combo 3 Special</strong> — เรียกชื่อการ์ดที่ต้องการ และสามารถขโมยได้ ถ้าในมือผู้เล่นที่เลือกมีการ์ดใบนี้ (ถ้าไม่มี = สุ่มขโมย 2 ใบ)</p>
   <p><strong>🥤×4 Combo 4 Normal</strong> — ดูไพ่ทั้งหมดในมือผู้เล่นที่เลือก</p>
   <p><strong>🥤×4 Combo 4 Special</strong> — ดูมือผู้เล่น แล้วเลือกขโมย 1 ใบ</p>
-  <p><strong>🥤×5 Combo 5 Normal</strong> — หยิบการ์ด 1 ใบจากกองทิ้ง (ยกเว้นเด็กเส้น)</p>
-  <p><strong>🥤×5 Combo 5 Special</strong> — ร้องเรียนผู้บริหาร ใช้แทนฟ้องกรมแรงงานตอนจั่วซองขาว (1 ครั้ง/เกม)</p>
+  <p><strong>🥤×5 Combo 5 Normal</strong> — เลือกการ์ด 1 ใบจากกองทิ้ง (ยกเว้นเด็กเส้น)</p>
+  <p><strong>🥤×5 Combo 5 Special</strong> — ร้องเรียนผู้บริหาร ใช้แทนฟ้องกรมแรงงานตอนจั่วได้ซองขาว (ใช้ได้ 1 ครั้ง/เกม)</p>
 </div>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">⚡ Attack Chain</h2>
-<p>โยนงาน Stack ได้สูงสุด 3 ชั้น = 6 เทิร์น ครบ 3 ชั้น = Resolve ทันที ไม่สามารถ Stack ต่อได้</p>
-<p>HR ปรับโครงสร้างระหว่าง Chain = เปลี่ยนทิศทาง แต่ Chain ยังดำเนินต่อ</p>
+<p>โยนงาน สามารถสะสมได้สูงสุด 3 ชั้น = 6 ใบ หากครบ 3 ชั้น = ต้องจั่วทันที ไม่สามารถสะสมต่อได้</p>
+<p>หากใช้งาน HR ปรับโครงสร้างระหว่าง มีการสะสม Attack Chain = เปลี่ยนทิศทาง แต่ Chain ยังดำเนินต่อ</p>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🔀 ระบบ Reshuffle</h2>
 <p>เมื่อกองจั่วหมด → นำกองทิ้งทั้งหมด (รวมซองขาว) มา Shuffle ใหม่เป็นกองจั่ว</p>
