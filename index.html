@@ -1621,6 +1621,14 @@ function renderGame() {
     showCardUsedPopup(gs.lastPlayedCard, gs.lastPlayedFrom, gs.lastPlayedTo||null);
   }
   document.getElementById('actionLog').innerHTML = newAction;
+
+  // Private reveal — only the receiving player sees what card they got
+  const prevReveal = document.getElementById('actionLog').dataset.lastReveal||'';
+  const revealKey = gs.privateReveal ? `${gs.privateReveal.toId}_${gs.privateReveal.version}` : '';
+  if (gs.privateReveal && gs.privateReveal.toId===myId && revealKey !== prevReveal) {
+    document.getElementById('actionLog').dataset.lastReveal = revealKey;
+    showPrivateRevealPopup(gs.privateReveal);
+  }
   renderPlayersStrip(gs, currentPid);
   renderMyHand(gs, isMyTurn);
   startTimer(gs, isMyTurn);
@@ -1712,6 +1720,57 @@ function showCardDetail(card) {
   } else {
     showCardPreview(card, gameState?.turnOrder[gameState?.currentTurnIndex]===myId);
   }
+}
+
+// ─── Private Reveal Popup (only for the receiving player) ───────────────────────
+function showPrivateRevealPopup(reveal) {
+  if (!reveal || reveal.toId !== myId) return;
+  const ids = Array.isArray(reveal.cardId) ? reveal.cardId : [reveal.cardId];
+  if (!ids.length) return;
+
+  document.getElementById('privateRevealPopup')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'privateRevealPopup';
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:3600;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
+    animation:fadeIn 0.2s ease; pointer-events:auto; cursor:pointer;
+  `;
+  const box = document.createElement('div');
+  box.style.cssText = `
+    background:var(--surface); border-radius:20px; padding:20px;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    border:2px solid var(--accent3); box-shadow:0 16px 48px rgba(0,0,0,0.6);
+    min-width:220px; max-width:min(80vw,320px);
+  `;
+  const stack = document.createElement('div');
+  stack.style.cssText = `
+    position:relative; width:min(50vw,160px);
+    height:calc(min(50vw,160px)*1.4 + ${(ids.length-1)*16}px);
+    margin-bottom:6px;
+  `;
+  ids.forEach((cid,i)=>{
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `
+      position:absolute; width:min(50vw,160px); aspect-ratio:5/7;
+      border-radius:12px; overflow:hidden;
+      box-shadow:0 4px 16px rgba(0,0,0,0.4);
+      top:${i*16}px; left:0; border:2px solid var(--accent3);
+    `;
+    wrap.innerHTML = cardThumb(cid, 160);
+    stack.appendChild(wrap);
+  });
+  box.appendChild(stack);
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size:0.9rem;color:var(--text2);text-align:center;';
+  label.innerHTML = `คุณได้รับการ์ดจาก <span style="color:var(--accent3);font-weight:700">${reveal.fromName||'?'}</span>`;
+  box.appendChild(label);
+  overlay.appendChild(box);
+  overlay.addEventListener('click', ()=>overlay.remove());
+  box.addEventListener('click', e=>e.stopPropagation());
+  document.body.appendChild(overlay);
+  setTimeout(()=>overlay.remove(), 3000);
 }
 
 // ─── Card Used Popup ──────────────────────────────────────────────────────────
@@ -2082,19 +2141,22 @@ function showCardPreview(card, isMyTurn) {
   // Scrollable container for pan after zoom
   const scrollWrap = document.createElement('div');
   scrollWrap.style.cssText = `
-    flex:1; overflow:auto; width:100%;
+    flex:1; overflow:auto; width:100%; min-height:0;
     display:flex; align-items:center; justify-content:center;
     -webkit-overflow-scrolling:touch;
   `;
   const imgWrap = document.createElement('div');
   imgWrap.style.cssText = `
     display:flex; align-items:center; justify-content:center;
-    min-width:100%; min-height:100%; padding:16px;
+    min-width:100%; min-height:100%; padding:12px;
+    box-sizing:border-box;
   `;
   const img = document.createElement('div');
   img.id = 'previewCardImg';
+  // Fix: bound by both width AND height so card never overflows viewport
+  // aspect-ratio 5/7 → height = width * 1.4, so width must also respect 70vh/1.4
   img.style.cssText = `
-    width:min(85vw,360px); aspect-ratio:5/7;
+    width:min(85vw,360px,calc(64vh)); aspect-ratio:5/7;
     border-radius:16px; overflow:hidden;
     box-shadow:0 16px 48px rgba(0,0,0,0.6);
     border:2px solid rgba(255,255,255,0.15);
@@ -2999,7 +3061,8 @@ async function resolveCombo3Normal(targetId) {
   const stolen=tHand.splice(ri,1)[0];
   ng.players[myId].hand.push(stolen);
   ng.pendingAction=null;
-  ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 ขโมย ${CARDS[stolen.id]?.emoji} จาก ${ng.players[targetId].name}!`;
+  ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 ขโมยการ์ดจาก ${ng.players[targetId].name}!`;
+  ng.privateReveal = { toId: myId, cardId: stolen.id, fromName: ng.players[targetId].name, version: (ng.version||0)+1 };
   await saveGameState(ng);
 }
 
@@ -3044,14 +3107,19 @@ function showCombo3CardPicker(targetId) {
       if (found) {
         tHand.splice(tHand.indexOf(found),1);
         ng.players[myId].hand.push(found);
-        ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✓ ได้ ${c.emoji} ${c.name}!`;
+        ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✓ ขโมยสำเร็จจาก ${ng.players[targetId]?.name||'เป้าหมาย'}!`;
+        ng.privateReveal = { toId: myId, cardId: found.id, fromName: ng.players[targetId]?.name||'เป้าหมาย', version: (ng.version||0)+1 };
       } else {
         // Steal 2 random
+        const stolenIds = [];
         for(let i=0;i<2&&tHand.length>0;i++){
           const ri=Math.floor(Math.random()*tHand.length);
-          ng.players[myId].hand.push(tHand.splice(ri,1)[0]);
+          const s = tHand.splice(ri,1)[0];
+          stolenIds.push(s.id);
+          ng.players[myId].hand.push(s);
         }
-        ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✗ ไม่มี ${c.name} สุ่มขโมย 2 ใบ!`;
+        ng.lastAction=`<span class="highlight">${myName}</span> Combo 3 Special ✗ ไม่ตรง สุ่มขโมย 2 ใบจาก ${ng.players[targetId]?.name||'เป้าหมาย'}!`;
+        ng.privateReveal = { toId: myId, cardId: stolenIds, fromName: ng.players[targetId]?.name||'เป้าหมาย', version: (ng.version||0)+1 };
       }
       ng.pendingAction = null; // BUG-069: clear so player can draw
       ng.lastPlayedCard=null; ng.lastPlayedFrom=null; ng.lastPlayedTo=null;
@@ -3164,8 +3232,9 @@ function _showCombo4StealModal(targetId) {
           const stolen=tHand.splice(si,1)[0];
           ng2.players[myId].hand.push(stolen);
           ng2.pendingAction=null;
-          ng2.lastAction=`<span class="highlight">${myName}</span> Combo 4 ขโมย ${cd?.emoji} ${cd?.name} จาก ${p.name}!`;
+          ng2.lastAction=`<span class="highlight">${myName}</span> Combo 4 ขโมยการ์ดจาก ${p.name}!`;
           ng2.lastPlayedCard=null; ng2.lastPlayedFrom=null; ng2.lastPlayedTo=null;
+          ng2.privateReveal = { toId: myId, cardId: stolen.id, fromName: p.name, version: (ng2.version||0)+1 };
         }
         await saveGameState(ng2);
       };
@@ -3382,7 +3451,8 @@ async function resolveFavor(card, fromId) {
     if (idx>=0) {
       const given=myHand.splice(idx,1)[0];
       ng.players[fromId].hand.push(given);
-      ng.lastAction=`<span class="highlight">${myName}</span> ให้ ${CARDS[given.id]?.emoji} ${CARDS[given.id]?.name} แก่ ${ng.players[fromId].name}`;
+      ng.lastAction=`<span class="highlight">${myName}</span> ส่งการ์ดให้ ${ng.players[fromId].name} แล้ว`;
+      ng.privateReveal = { toId: fromId, cardId: given.id, fromName: myName, version: (ng.version||0)+1 };
     }
   }
   ng.pendingAction=null;
