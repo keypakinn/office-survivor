@@ -1104,6 +1104,7 @@ const SFX = (() => {
           // Long dramatic vibration pattern
           if (navigator.vibrate) navigator.vibrate([200,50,150,50,100,50,300]);
           break;
+        }
         case 'defuse': {
           // Success ding
           [523,659,784].forEach((freq,i) => {
@@ -2374,6 +2375,16 @@ async function _drawOnce() {
   selectedCards = [];
 
   if (drawn.id==='white-envelope') {
+    // FIX: ถ้า deck ว่างหลังจั่วซองขาว → reshuffle discard ก่อน
+    // ป้องกันไม่ให้ซองขาวที่ใส่กลับ deck กลายเป็นใบเดียวในกอง (คนต่อไปโดน 100%)
+    if (gs.deck.length===0) {
+      const reshufflable = gs.discard.filter(c=>c.id!=='nepo-baby');
+      if (reshufflable.length > 0) {
+        gs.deck = shuffle(reshufflable);
+        gs.discard = gs.discard.filter(c=>c.id==='nepo-baby');
+        toast('🔀 สับไพ่กองทิ้งกลับเป็นกองจั่ว!','info', 2500);
+      }
+    }
     const hand = gs.players[myId].hand||[];
     const hasDefuse = hand.some(c=>c.id==='labor-lawsuit');
     const hasNepo = hand.some(c=>c.id==='nepo-baby');
@@ -3743,48 +3754,49 @@ const RULES_HTML = `
 <p>ผู้เล่นผลัดกันจั่วไพ่จากกองจั่ว ใครจั่วได้ <strong>📄 ซองขาว</strong> แล้วไม่มีการ์ดป้องกัน = ตกรอบ คนสุดท้ายที่รอดชนะ</p>
 <p>ทุกเทิร์น: <strong>เล่นการ์ด (ไม่บังคับ) → จั่วไพ่ 1 ใบ</strong></p>
 
-<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">📄 ซองขาว (White Envelope)</h2>
-<p>จั่วแล้วต้องใช้การ์ดป้องกัน ถ้าไม่มี = ตกรอบทันที จำนวน = ผู้เล่น - 1</p>
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">📄 ซองขาว</h2>
+<p>จั่วแล้วต้องใช้การ์ดป้องกัน ถ้าไม่มี = ตกรอบทันที จำนวนซองขาวในเกม = ผู้เล่น - 1</p>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🛡️ การ์ดป้องกันซองขาว</h2>
-<div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;">
-  <p><strong>⚖️ ฟ้องกรมแรงงาน</strong> — ใส่ซองขาวกลับกองจั่วที่ตำแหน่งที่เลือกได้</p>
-  <p><strong>👶 เด็กเส้น</strong> — ส่งซองขาวให้ผู้เล่นอื่นทันที (ป้องกันได้ด้วย ฟ้องกรมแรงงาน หรือ เด็กเส้น เท่านั้น) เมื่อใช้งานแล้ว เด็กเส้นจะถูกลบออกจากเกมส์ ไม่อยู่ในกองทิ้ง</p>
-  <p><strong>🥤×5 ร้องเรียนผู้บริหาร</strong> — ใช้ Combo 5 Special ตอนจั่วซองขาว (ใช้ได้ 1 ครั้ง/เกม)</p>
+<div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
+  <p><strong>⚖️ ฟ้องกรมแรงงาน</strong> — เลือกตำแหน่งแล้วใส่ซองขาวกลับกองจั่ว</p>
+  <p><strong>👶 เด็กเส้น</strong> — ส่งซองขาวให้ผู้เล่นอื่นทันที ผู้รับต้องรับมือด้วย ฟ้องกรมแรงงาน หรือ เด็กเส้น เท่านั้น เมื่อใช้แล้วเด็กเส้นจะถูกลบออกจากเกมถาวร ไม่อยู่ในกองทิ้ง</p>
+  <p><strong>🥤×5 ร้องเรียนผู้บริหาร</strong> — Combo 5 Special ใช้ตอนจั่วได้ซองขาว (1 ครั้ง/เกม)</p>
 </div>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🎴 การ์ด Action</h2>
 <div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
-  <p><strong>📋 โยนงาน</strong> — จบเทิร์นทันที ผู้เล่นคนถัดไปต้องจั่ว 2 ใบ สามารถสะสมได้้สูงสุด 3 ชั้น (จั่ว 6 ใบ)</p>
-  <p><strong>🔮 อัญเชิญแม่หมอ</strong> — ดู 3 ใบบนสุดของกองจั่ว (คนอื่นไม่เห็น)</p>
-  <p><strong>🏥 ลาป่วย</strong> — ป้องกันตัวเองจาก Effect ที่มีเป้าหมาย 1 เทิร์น (ยกเว้นเด็กเส้น)</p>
-  <p><strong>🔄 แลกงาน</strong> — เลือกผู้เล่น → เขาต้องส่งการ์ด 1 ใบให้คุณ (ใช้ Combo Counter ได้)</p>
+  <p><strong>📋 โยนงาน</strong> — จบเทิร์นทันที ผู้เล่นถัดไปต้องจั่ว +2 ใบ สะสมได้สูงสุด 3 ชั้น (6 ใบ)</p>
+  <p><strong>🔮 อัญเชิญแม่หมอ</strong> — แอบดู 3 ใบบนสุดของกองจั่ว เฉพาะผู้ใช้เท่านั้นที่เห็น</p>
+  <p><strong>🏥 ลาป่วย</strong> — ป้องกันตัวเองจาก Effect ที่มีเป้าหมาย 1 เทิร์น ยกเว้นเด็กเส้น</p>
+  <p><strong>🔄 แลกงาน</strong> — เลือกผู้เล่น เขาต้องส่งการ์ด 1 ใบให้คุณ (ป้องกันได้ด้วย Combo 2 Special)</p>
   <p><strong>📢 HR ปรับโครงสร้าง</strong> — จบเทิร์นทันที และเปลี่ยนทิศทางการเล่น</p>
 </div>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">✨ ระบบ Combo</h2>
-<p>กดปุ่ม Combo แล้วเลือก Combo Resource (โกโก้ปั่น/ชานมไข่มุก/ชาเขียว) ได้ตั้งแต่ 2-5 ใบ</p>
-<p><strong>Normal</strong> = ต่างชนิดได้ | <strong>Special</strong> = ต้องชนิดเดียวกันทั้งหมด</p>
+<p>กดปุ่ม Combo แล้วเลือก Combo Resource (☕ โกโก้ปั่น / 🧋 ชานมไข่มุก / 🥤 ชาเขียว) 2-5 ใบ ก่อนจั่ว</p>
+<p><strong>Normal</strong> = ต่างชนิดได้ &nbsp;|&nbsp; <strong>Special</strong> = ต้องชนิดเดียวกันทั้งหมด</p>
 <div style="background:var(--surface);border-radius:12px;padding:16px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
-  <p><strong>🥤×2 Combo 2 Normal</strong> — ดู 2 ใบบนสุด แล้วเลือกเก็บขึ้นมือ 1 ใบ</p>
-  <p><strong>🥤×2 Combo 2 Special</strong> — เปิด Counter Mode ยกเลิก แลกงาน/Combo 3/Combo 4 ได้</p>
-  <p><strong>🥤×3 Combo 3 Normal</strong> — สุ่มขโมย 1 ใบจากมือผู้เล่นที่เลือก</p>
-  <p><strong>🥤×3 Combo 3 Special</strong> — เรียกชื่อการ์ดที่ต้องการ และสามารถขโมยได้ ถ้าในมือผู้เล่นที่เลือกมีการ์ดใบนี้ (ถ้าไม่มี = สุ่มขโมย 2 ใบ)</p>
-  <p><strong>🥤×4 Combo 4 Normal</strong> — ดูไพ่ทั้งหมดในมือผู้เล่นที่เลือก</p>
-  <p><strong>🥤×4 Combo 4 Special</strong> — ดูมือผู้เล่น แล้วเลือกขโมย 1 ใบ</p>
-  <p><strong>🥤×5 Combo 5 Normal</strong> — เลือกการ์ด 1 ใบจากกองทิ้ง (ยกเว้นเด็กเส้น)</p>
-  <p><strong>🥤×5 Combo 5 Special</strong> — ร้องเรียนผู้บริหาร ใช้แทนฟ้องกรมแรงงานตอนจั่วได้ซองขาว (ใช้ได้ 1 ครั้ง/เกม)</p>
+  <p><strong>🥤×2 Normal</strong> — ดู 2 ใบบนสุด เก็บ 1 ใบ วางกลับ 1 ใบ</p>
+  <p><strong>🥤×2 Special</strong> — เปิด Counter Mode ยกเลิก แลกงาน / Combo 3 / Combo 4 ได้ (หมดอายุเมื่อจบเทิร์น)</p>
+  <p><strong>🥤×3 Normal</strong> — เลือกผู้เล่น สุ่มขโมย 1 ใบจากมือ</p>
+  <p><strong>🥤×3 Special</strong> — เลือกผู้เล่น เรียกชื่อการ์ดที่ต้องการ ถ้ามี = ขโมยได้ ถ้าไม่มี = สุ่มขโมย 2 ใบ</p>
+  <p><strong>🥤×4 Normal</strong> — เลือกผู้เล่น ดูไพ่ทั้งหมดในมือ (ไม่ขโมย)</p>
+  <p><strong>🥤×4 Special</strong> — เลือกผู้เล่น ดูมือทั้งหมด แล้วเลือกขโมย 1 ใบ</p>
+  <p><strong>🥤×5 Normal</strong> — เลือก 1 ใบจากกองทิ้ง (ยกเว้นเด็กเส้น)</p>
+  <p><strong>🥤×5 Special — ร้องเรียนผู้บริหาร</strong> — ใช้แทนฟ้องกรมแรงงานตอนจั่วได้ซองขาว (1 ครั้ง/เกม)</p>
 </div>
 
 <h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">⚡ Attack Chain</h2>
-<p>โยนงาน สามารถสะสมได้สูงสุด 3 ชั้น = 6 ใบ หากครบ 3 ชั้น = ต้องจั่วทันที ไม่สามารถสะสมต่อได้</p>
-<p>หากใช้งาน HR ปรับโครงสร้างระหว่าง มีการสะสม Attack Chain = เปลี่ยนทิศทาง แต่ Chain ยังดำเนินต่อ</p>
+<p>โยนงานสะสมได้สูงสุด 3 ชั้น = 6 ใบ ครบ 3 ชั้นต้องจั่วทันที ไม่สามารถสะสมต่อได้อีก</p>
+<p>HR ปรับโครงสร้างระหว่าง Chain = เปลี่ยนทิศทาง แต่ Chain และจำนวนใบที่ต้องจั่วยังคงอยู่</p>
 
-<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🔀 ระบบ Reshuffle</h2>
-<p>เมื่อกองจั่วหมด → นำกองทิ้งทั้งหมด (รวมซองขาว) มา Shuffle ใหม่เป็นกองจั่ว</p>
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">🔀 Reshuffle</h2>
+<p>กองจั่วหมด → นำกองทิ้งทั้งหมด รวมซองขาว มา Shuffle ใหม่เป็นกองจั่ว</p>
+<p>หากจั่วได้ซองขาวจนกองจั่วเหลือ 0 ใบ ระบบจะ Reshuffle กองทิ้งกลับเข้ากองจั่วทันที <strong>ก่อน</strong>ให้ใช้การ์ดป้องกัน เพื่อไม่ให้ซองขาวที่ใส่กลับกลายเป็นใบเดียวในกองจั่ว ป้องกันคนต่อไปจั่วโดน 100%</p>
 
-<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">⏱️ Timer</h2>
-<p>แต่ละเทิร์น 60 วินาที หมดเวลา = จั่วอัตโนมัติ ถ้าจั่วได้ซองขาว = ใช้การป้องกันอัตโนมัติ</p>
+<h2 style="color:var(--accent);margin-top:24px;border-bottom:1px solid var(--border);padding-bottom:8px;">⏱️ เวลา</h2>
+<p>แต่ละเทิร์น 60 วินาที หมดเวลา = จั่วอัตโนมัติ ถ้าจั่วได้ซองขาวและไม่มีการ์ดป้องกัน = ตกรอบอัตโนมัติ</p>
 `;
 
 function showRulesScreen() {
